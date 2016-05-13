@@ -5,7 +5,7 @@ RNN::RNN(int word_dim, int hidden_dim, double bptt_truncate)
   word_dim_ = word_dim;
   hidden_dim_ = hidden_dim;
   bptt_truncate_ = bptt_truncate;
-
+  epoch_ = 0;
   // == initialize model parameters ==
   
   random_device rd;
@@ -315,10 +315,10 @@ void RNN::train(vector <vector <int>> &X_train, vector <vector <int>> &Y_train,
   struct tm *timeinfo;
   char buf[80];
 
-  double loss_last = 100.0;
+  double loss_last = 10000.0;
   lr_ = learning_rate;
   cout << "start training..." << endl;
-  for(int epoch = 0; epoch < nepoch; epoch ++)
+  for(int epoch = epoch_; epoch < nepoch; epoch ++)
     {
       if (epoch % snapshot_interval == 0)
 	{
@@ -357,6 +357,7 @@ void RNN::train(vector <vector <int>> &X_train, vector <vector <int>> &Y_train,
 	  sgd_step(X_train[i], Y_train[i], learning_rate);
 	  
 	}
+      epoch_ = epoch + 1;
     }
 }
 
@@ -368,6 +369,7 @@ void RNN::write(string snapshot)
   net.set_word_dim(word_dim_);
   net.set_learingrate(lr_);
   net.set_bptt_truncate(bptt_truncate_);
+  net.set_epoch(epoch_);
   for(int i = 0; i < word_dim_ * hidden_dim_; ++i)
     {
       net.add_u(U[i]);
@@ -396,6 +398,7 @@ void RNN::read(string snapshot)
   hidden_dim_ = net.hidden_dim();
   lr_ = net.learingrate();
   bptt_truncate_ = net.bptt_truncate();
+  epoch_ = net.epoch();
   unique_ptr<double[]> U_temp(new double[word_dim_ * hidden_dim_]);
   unique_ptr<double[]> W_temp(new double[hidden_dim_ * hidden_dim_]);
   unique_ptr<double[]> V_temp(new double[word_dim_ * hidden_dim_]);

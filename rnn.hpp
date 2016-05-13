@@ -27,6 +27,7 @@ class RNN
    * some solver parameters
    */
   double lr_;
+  int epoch_;
   /**
    * internal variable for output and state
    */

@@ -32,10 +32,11 @@ void protobuf_AssignDesc_net_2eproto() {
       "net.proto");
   GOOGLE_CHECK(file != NULL);
   NetParamter_descriptor_ = file->message_type(0);
-  static const int NetParamter_offsets_[7] = {
+  static const int NetParamter_offsets_[8] = {
     GOOGLE_PROTOBUF_GENERATED_MESSAGE_FIELD_OFFSET(NetParamter, word_dim_),
     GOOGLE_PROTOBUF_GENERATED_MESSAGE_FIELD_OFFSET(NetParamter, hidden_dim_),
     GOOGLE_PROTOBUF_GENERATED_MESSAGE_FIELD_OFFSET(NetParamter, bptt_truncate_),
+    GOOGLE_PROTOBUF_GENERATED_MESSAGE_FIELD_OFFSET(NetParamter, epoch_),
     GOOGLE_PROTOBUF_GENERATED_MESSAGE_FIELD_OFFSET(NetParamter, learingrate_),
     GOOGLE_PROTOBUF_GENERATED_MESSAGE_FIELD_OFFSET(NetParamter, u_),
     GOOGLE_PROTOBUF_GENERATED_MESSAGE_FIELD_OFFSET(NetParamter, w_),
@@ -82,10 +83,11 @@ void protobuf_AddDesc_net_2eproto() {
   GOOGLE_PROTOBUF_VERIFY_VERSION;
 
   ::google::protobuf::DescriptorPool::InternalAddGeneratedFile(
-    "\n\tnet.proto\"\214\001\n\013NetParamter\022\020\n\010word_dim\030"
+    "\n\tnet.proto\"\233\001\n\013NetParamter\022\020\n\010word_dim\030"
     "\001 \002(\007\022\022\n\nhidden_dim\030\002 \002(\007\022\025\n\rbptt_trunca"
-    "te\030\003 \002(\007\022\023\n\013learingRate\030\004 \001(\001\022\r\n\001U\030\005 \003(\001"
-    "B\002\020\001\022\r\n\001W\030\006 \003(\001B\002\020\001\022\r\n\001V\030\007 \003(\001B\002\020\001", 154);
+    "te\030\003 \002(\007\022\r\n\005epoch\030\004 \002(\007\022\023\n\013learingRate\030\005"
+    " \001(\001\022\r\n\001U\030\006 \003(\001B\002\020\001\022\r\n\001W\030\007 \003(\001B\002\020\001\022\r\n\001V\030"
+    "\010 \003(\001B\002\020\001", 169);
   ::google::protobuf::MessageFactory::InternalRegisterGeneratedFile(
     "net.proto", &protobuf_RegisterTypes);
   NetParamter::default_instance_ = new NetParamter();
@@ -106,6 +108,7 @@ struct StaticDescriptorInitializer_net_2eproto {
 const int NetParamter::kWordDimFieldNumber;
 const int NetParamter::kHiddenDimFieldNumber;
 const int NetParamter::kBpttTruncateFieldNumber;
+const int NetParamter::kEpochFieldNumber;
 const int NetParamter::kLearingRateFieldNumber;
 const int NetParamter::kUFieldNumber;
 const int NetParamter::kWFieldNumber;
@@ -133,6 +136,7 @@ void NetParamter::SharedCtor() {
   word_dim_ = 0u;
   hidden_dim_ = 0u;
   bptt_truncate_ = 0u;
+  epoch_ = 0u;
   learingrate_ = 0;
   ::memset(_has_bits_, 0, sizeof(_has_bits_));
 }
@@ -179,9 +183,8 @@ void NetParamter::Clear() {
     ::memset(&first, 0, n);                                \
   } while (0)
 
-  if (_has_bits_[0 / 32] & 15) {
+  if (_has_bits_[0 / 32] & 31) {
     ZR_(word_dim_, learingrate_);
-    bptt_truncate_ = 0u;
   }
 
 #undef OFFSET_OF_FIELD_
@@ -244,13 +247,28 @@ bool NetParamter::MergePartialFromCodedStream(
         } else {
           goto handle_unusual;
         }
-        if (input->ExpectTag(33)) goto parse_learingRate;
+        if (input->ExpectTag(37)) goto parse_epoch;
         break;
       }
 
-      // optional double learingRate = 4;
+      // required fixed32 epoch = 4;
       case 4: {
-        if (tag == 33) {
+        if (tag == 37) {
+         parse_epoch:
+          DO_((::google::protobuf::internal::WireFormatLite::ReadPrimitive<
+                   ::google::protobuf::uint32, ::google::protobuf::internal::WireFormatLite::TYPE_FIXED32>(
+                 input, &epoch_)));
+          set_has_epoch();
+        } else {
+          goto handle_unusual;
+        }
+        if (input->ExpectTag(41)) goto parse_learingRate;
+        break;
+      }
+
+      // optional double learingRate = 5;
+      case 5: {
+        if (tag == 41) {
          parse_learingRate:
           DO_((::google::protobuf::internal::WireFormatLite::ReadPrimitive<
                    double, ::google::protobuf::internal::WireFormatLite::TYPE_DOUBLE>(
@@ -259,57 +277,57 @@ bool NetParamter::MergePartialFromCodedStream(
         } else {
           goto handle_unusual;
         }
-        if (input->ExpectTag(42)) goto parse_U;
+        if (input->ExpectTag(50)) goto parse_U;
         break;
       }
 
-      // repeated double U = 5 [packed = true];
-      case 5: {
-        if (tag == 42) {
+      // repeated double U = 6 [packed = true];
+      case 6: {
+        if (tag == 50) {
          parse_U:
           DO_((::google::protobuf::internal::WireFormatLite::ReadPackedPrimitive<
                    double, ::google::protobuf::internal::WireFormatLite::TYPE_DOUBLE>(
                  input, this->mutable_u())));
-        } else if (tag == 41) {
+        } else if (tag == 49) {
           DO_((::google::protobuf::internal::WireFormatLite::ReadRepeatedPrimitiveNoInline<
                    double, ::google::protobuf::internal::WireFormatLite::TYPE_DOUBLE>(
-                 1, 42, input, this->mutable_u())));
+                 1, 50, input, this->mutable_u())));
         } else {
           goto handle_unusual;
         }
-        if (input->ExpectTag(50)) goto parse_W;
+        if (input->ExpectTag(58)) goto parse_W;
         break;
       }
 
-      // repeated double W = 6 [packed = true];
-      case 6: {
-        if (tag == 50) {
+      // repeated double W = 7 [packed = true];
+      case 7: {
+        if (tag == 58) {
          parse_W:
           DO_((::google::protobuf::internal::WireFormatLite::ReadPackedPrimitive<
                    double, ::google::protobuf::internal::WireFormatLite::TYPE_DOUBLE>(
                  input, this->mutable_w())));
-        } else if (tag == 49) {
+        } else if (tag == 57) {
           DO_((::google::protobuf::internal::WireFormatLite::ReadRepeatedPrimitiveNoInline<
                    double, ::google::protobuf::internal::WireFormatLite::TYPE_DOUBLE>(
-                 1, 50, input, this->mutable_w())));
+                 1, 58, input, this->mutable_w())));
         } else {
           goto handle_unusual;
         }
-        if (input->ExpectTag(58)) goto parse_V;
+        if (input->ExpectTag(66)) goto parse_V;
         break;
       }
 
-      // repeated double V = 7 [packed = true];
-      case 7: {
-        if (tag == 58) {
+      // repeated double V = 8 [packed = true];
+      case 8: {
+        if (tag == 66) {
          parse_V:
           DO_((::google::protobuf::internal::WireFormatLite::ReadPackedPrimitive<
                    double, ::google::protobuf::internal::WireFormatLite::TYPE_DOUBLE>(
                  input, this->mutable_v())));
-        } else if (tag == 57) {
+        } else if (tag == 65) {
           DO_((::google::protobuf::internal::WireFormatLite::ReadRepeatedPrimitiveNoInline<
                    double, ::google::protobuf::internal::WireFormatLite::TYPE_DOUBLE>(
-                 1, 58, input, this->mutable_v())));
+                 1, 66, input, this->mutable_v())));
         } else {
           goto handle_unusual;
         }
@@ -357,14 +375,19 @@ void NetParamter::SerializeWithCachedSizes(
     ::google::protobuf::internal::WireFormatLite::WriteFixed32(3, this->bptt_truncate(), output);
   }
 
-  // optional double learingRate = 4;
-  if (has_learingrate()) {
-    ::google::protobuf::internal::WireFormatLite::WriteDouble(4, this->learingrate(), output);
+  // required fixed32 epoch = 4;
+  if (has_epoch()) {
+    ::google::protobuf::internal::WireFormatLite::WriteFixed32(4, this->epoch(), output);
   }
 
-  // repeated double U = 5 [packed = true];
+  // optional double learingRate = 5;
+  if (has_learingrate()) {
+    ::google::protobuf::internal::WireFormatLite::WriteDouble(5, this->learingrate(), output);
+  }
+
+  // repeated double U = 6 [packed = true];
   if (this->u_size() > 0) {
-    ::google::protobuf::internal::WireFormatLite::WriteTag(5, ::google::protobuf::internal::WireFormatLite::WIRETYPE_LENGTH_DELIMITED, output);
+    ::google::protobuf::internal::WireFormatLite::WriteTag(6, ::google::protobuf::internal::WireFormatLite::WIRETYPE_LENGTH_DELIMITED, output);
     output->WriteVarint32(_u_cached_byte_size_);
   }
   for (int i = 0; i < this->u_size(); i++) {
@@ -372,9 +395,9 @@ void NetParamter::SerializeWithCachedSizes(
       this->u(i), output);
   }
 
-  // repeated double W = 6 [packed = true];
+  // repeated double W = 7 [packed = true];
   if (this->w_size() > 0) {
-    ::google::protobuf::internal::WireFormatLite::WriteTag(6, ::google::protobuf::internal::WireFormatLite::WIRETYPE_LENGTH_DELIMITED, output);
+    ::google::protobuf::internal::WireFormatLite::WriteTag(7, ::google::protobuf::internal::WireFormatLite::WIRETYPE_LENGTH_DELIMITED, output);
     output->WriteVarint32(_w_cached_byte_size_);
   }
   for (int i = 0; i < this->w_size(); i++) {
@@ -382,9 +405,9 @@ void NetParamter::SerializeWithCachedSizes(
       this->w(i), output);
   }
 
-  // repeated double V = 7 [packed = true];
+  // repeated double V = 8 [packed = true];
   if (this->v_size() > 0) {
-    ::google::protobuf::internal::WireFormatLite::WriteTag(7, ::google::protobuf::internal::WireFormatLite::WIRETYPE_LENGTH_DELIMITED, output);
+    ::google::protobuf::internal::WireFormatLite::WriteTag(8, ::google::protobuf::internal::WireFormatLite::WIRETYPE_LENGTH_DELIMITED, output);
     output->WriteVarint32(_v_cached_byte_size_);
   }
   for (int i = 0; i < this->v_size(); i++) {
@@ -417,15 +440,20 @@ void NetParamter::SerializeWithCachedSizes(
     target = ::google::protobuf::internal::WireFormatLite::WriteFixed32ToArray(3, this->bptt_truncate(), target);
   }
 
-  // optional double learingRate = 4;
-  if (has_learingrate()) {
-    target = ::google::protobuf::internal::WireFormatLite::WriteDoubleToArray(4, this->learingrate(), target);
+  // required fixed32 epoch = 4;
+  if (has_epoch()) {
+    target = ::google::protobuf::internal::WireFormatLite::WriteFixed32ToArray(4, this->epoch(), target);
   }
 
-  // repeated double U = 5 [packed = true];
+  // optional double learingRate = 5;
+  if (has_learingrate()) {
+    target = ::google::protobuf::internal::WireFormatLite::WriteDoubleToArray(5, this->learingrate(), target);
+  }
+
+  // repeated double U = 6 [packed = true];
   if (this->u_size() > 0) {
     target = ::google::protobuf::internal::WireFormatLite::WriteTagToArray(
-      5,
+      6,
       ::google::protobuf::internal::WireFormatLite::WIRETYPE_LENGTH_DELIMITED,
       target);
     target = ::google::protobuf::io::CodedOutputStream::WriteVarint32ToArray(
@@ -436,10 +464,10 @@ void NetParamter::SerializeWithCachedSizes(
       WriteDoubleNoTagToArray(this->u(i), target);
   }
 
-  // repeated double W = 6 [packed = true];
+  // repeated double W = 7 [packed = true];
   if (this->w_size() > 0) {
     target = ::google::protobuf::internal::WireFormatLite::WriteTagToArray(
-      6,
+      7,
       ::google::protobuf::internal::WireFormatLite::WIRETYPE_LENGTH_DELIMITED,
       target);
     target = ::google::protobuf::io::CodedOutputStream::WriteVarint32ToArray(
@@ -450,10 +478,10 @@ void NetParamter::SerializeWithCachedSizes(
       WriteDoubleNoTagToArray(this->w(i), target);
   }
 
-  // repeated double V = 7 [packed = true];
+  // repeated double V = 8 [packed = true];
   if (this->v_size() > 0) {
     target = ::google::protobuf::internal::WireFormatLite::WriteTagToArray(
-      7,
+      8,
       ::google::protobuf::internal::WireFormatLite::WIRETYPE_LENGTH_DELIMITED,
       target);
     target = ::google::protobuf::io::CodedOutputStream::WriteVarint32ToArray(
@@ -491,13 +519,18 @@ int NetParamter::ByteSize() const {
       total_size += 1 + 4;
     }
 
-    // optional double learingRate = 4;
+    // required fixed32 epoch = 4;
+    if (has_epoch()) {
+      total_size += 1 + 4;
+    }
+
+    // optional double learingRate = 5;
     if (has_learingrate()) {
       total_size += 1 + 8;
     }
 
   }
-  // repeated double U = 5 [packed = true];
+  // repeated double U = 6 [packed = true];
   {
     int data_size = 0;
     data_size = 8 * this->u_size();
@@ -511,7 +544,7 @@ int NetParamter::ByteSize() const {
     total_size += data_size;
   }
 
-  // repeated double W = 6 [packed = true];
+  // repeated double W = 7 [packed = true];
   {
     int data_size = 0;
     data_size = 8 * this->w_size();
@@ -525,7 +558,7 @@ int NetParamter::ByteSize() const {
     total_size += data_size;
   }
 
-  // repeated double V = 7 [packed = true];
+  // repeated double V = 8 [packed = true];
   {
     int data_size = 0;
     data_size = 8 * this->v_size();
@@ -577,6 +610,9 @@ void NetParamter::MergeFrom(const NetParamter& from) {
     if (from.has_bptt_truncate()) {
       set_bptt_truncate(from.bptt_truncate());
     }
+    if (from.has_epoch()) {
+      set_epoch(from.epoch());
+    }
     if (from.has_learingrate()) {
       set_learingrate(from.learingrate());
     }
@@ -597,7 +633,7 @@ void NetParamter::CopyFrom(const NetParamter& from) {
 }
 
 bool NetParamter::IsInitialized() const {
-  if ((_has_bits_[0] & 0x00000007) != 0x00000007) return false;
+  if ((_has_bits_[0] & 0x0000000f) != 0x0000000f) return false;
 
   return true;
 }
@@ -607,6 +643,7 @@ void NetParamter::Swap(NetParamter* other) {
     std::swap(word_dim_, other->word_dim_);
     std::swap(hidden_dim_, other->hidden_dim_);
     std::swap(bptt_truncate_, other->bptt_truncate_);
+    std::swap(epoch_, other->epoch_);
     std::swap(learingrate_, other->learingrate_);
     u_.Swap(&other->u_);
     w_.Swap(&other->w_);

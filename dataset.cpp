@@ -34,6 +34,7 @@ vector <Sentence> Dataset<DType>::tokenize()
 	  continue;
 	}
       char terminator = word.back();
+      transform(word.begin(), word.end(), word.begin(), ::tolower);
       // judge whether it is the last word of a sentence
       if (terminator != '.' && terminator != ';' && terminator != '?')
 	{

@@ -2,8 +2,9 @@ message NetParamter {
   required fixed32 word_dim = 1;
   required fixed32 hidden_dim = 2;
   required fixed32 bptt_truncate = 3;
-  optional double learingRate = 4;
-  repeated double U = 5 [packed=true];
-  repeated double W = 6 [packed=true];
-  repeated double V = 7 [packed=true];
+  required fixed32 epoch = 4;
+  optional double learingRate = 5;
+  repeated double U = 6 [packed=true];
+  repeated double W = 7 [packed=true];
+  repeated double V = 8 [packed=true];
 }

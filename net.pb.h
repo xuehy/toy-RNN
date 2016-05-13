@@ -109,17 +109,24 @@ class NetParamter : public ::google::protobuf::Message {
   inline ::google::protobuf::uint32 bptt_truncate() const;
   inline void set_bptt_truncate(::google::protobuf::uint32 value);
 
-  // optional double learingRate = 4;
+  // required fixed32 epoch = 4;
+  inline bool has_epoch() const;
+  inline void clear_epoch();
+  static const int kEpochFieldNumber = 4;
+  inline ::google::protobuf::uint32 epoch() const;
+  inline void set_epoch(::google::protobuf::uint32 value);
+
+  // optional double learingRate = 5;
   inline bool has_learingrate() const;
   inline void clear_learingrate();
-  static const int kLearingRateFieldNumber = 4;
+  static const int kLearingRateFieldNumber = 5;
   inline double learingrate() const;
   inline void set_learingrate(double value);
 
-  // repeated double U = 5 [packed = true];
+  // repeated double U = 6 [packed = true];
   inline int u_size() const;
   inline void clear_u();
-  static const int kUFieldNumber = 5;
+  static const int kUFieldNumber = 6;
   inline double u(int index) const;
   inline void set_u(int index, double value);
   inline void add_u(double value);
@@ -128,10 +135,10 @@ class NetParamter : public ::google::protobuf::Message {
   inline ::google::protobuf::RepeatedField< double >*
       mutable_u();
 
-  // repeated double W = 6 [packed = true];
+  // repeated double W = 7 [packed = true];
   inline int w_size() const;
   inline void clear_w();
-  static const int kWFieldNumber = 6;
+  static const int kWFieldNumber = 7;
   inline double w(int index) const;
   inline void set_w(int index, double value);
   inline void add_w(double value);
@@ -140,10 +147,10 @@ class NetParamter : public ::google::protobuf::Message {
   inline ::google::protobuf::RepeatedField< double >*
       mutable_w();
 
-  // repeated double V = 7 [packed = true];
+  // repeated double V = 8 [packed = true];
   inline int v_size() const;
   inline void clear_v();
-  static const int kVFieldNumber = 7;
+  static const int kVFieldNumber = 8;
   inline double v(int index) const;
   inline void set_v(int index, double value);
   inline void add_v(double value);
@@ -160,6 +167,8 @@ class NetParamter : public ::google::protobuf::Message {
   inline void clear_has_hidden_dim();
   inline void set_has_bptt_truncate();
   inline void clear_has_bptt_truncate();
+  inline void set_has_epoch();
+  inline void clear_has_epoch();
   inline void set_has_learingrate();
   inline void clear_has_learingrate();
 
@@ -169,6 +178,8 @@ class NetParamter : public ::google::protobuf::Message {
   mutable int _cached_size_;
   ::google::protobuf::uint32 word_dim_;
   ::google::protobuf::uint32 hidden_dim_;
+  ::google::protobuf::uint32 bptt_truncate_;
+  ::google::protobuf::uint32 epoch_;
   double learingrate_;
   ::google::protobuf::RepeatedField< double > u_;
   mutable int _u_cached_byte_size_;
@@ -176,7 +187,6 @@ class NetParamter : public ::google::protobuf::Message {
   mutable int _w_cached_byte_size_;
   ::google::protobuf::RepeatedField< double > v_;
   mutable int _v_cached_byte_size_;
-  ::google::protobuf::uint32 bptt_truncate_;
   friend void  protobuf_AddDesc_net_2eproto();
   friend void protobuf_AssignDesc_net_2eproto();
   friend void protobuf_ShutdownFile_net_2eproto();
@@ -263,15 +273,39 @@ inline void NetParamter::set_bptt_truncate(::google::protobuf::uint32 value) {
   // @@protoc_insertion_point(field_set:NetParamter.bptt_truncate)
 }
 
-// optional double learingRate = 4;
-inline bool NetParamter::has_learingrate() const {
+// required fixed32 epoch = 4;
+inline bool NetParamter::has_epoch() const {
   return (_has_bits_[0] & 0x00000008u) != 0;
 }
-inline void NetParamter::set_has_learingrate() {
+inline void NetParamter::set_has_epoch() {
   _has_bits_[0] |= 0x00000008u;
 }
-inline void NetParamter::clear_has_learingrate() {
+inline void NetParamter::clear_has_epoch() {
   _has_bits_[0] &= ~0x00000008u;
+}
+inline void NetParamter::clear_epoch() {
+  epoch_ = 0u;
+  clear_has_epoch();
+}
+inline ::google::protobuf::uint32 NetParamter::epoch() const {
+  // @@protoc_insertion_point(field_get:NetParamter.epoch)
+  return epoch_;
+}
+inline void NetParamter::set_epoch(::google::protobuf::uint32 value) {
+  set_has_epoch();
+  epoch_ = value;
+  // @@protoc_insertion_point(field_set:NetParamter.epoch)
+}
+
+// optional double learingRate = 5;
+inline bool NetParamter::has_learingrate() const {
+  return (_has_bits_[0] & 0x00000010u) != 0;
+}
+inline void NetParamter::set_has_learingrate() {
+  _has_bits_[0] |= 0x00000010u;
+}
+inline void NetParamter::clear_has_learingrate() {
+  _has_bits_[0] &= ~0x00000010u;
 }
 inline void NetParamter::clear_learingrate() {
   learingrate_ = 0;
@@ -287,7 +321,7 @@ inline void NetParamter::set_learingrate(double value) {
   // @@protoc_insertion_point(field_set:NetParamter.learingRate)
 }
 
-// repeated double U = 5 [packed = true];
+// repeated double U = 6 [packed = true];
 inline int NetParamter::u_size() const {
   return u_.size();
 }
@@ -317,7 +351,7 @@ NetParamter::mutable_u() {
   return &u_;
 }
 
-// repeated double W = 6 [packed = true];
+// repeated double W = 7 [packed = true];
 inline int NetParamter::w_size() const {
   return w_.size();
 }
@@ -347,7 +381,7 @@ NetParamter::mutable_w() {
   return &w_;
 }
 
-// repeated double V = 7 [packed = true];
+// repeated double V = 8 [packed = true];
 inline int NetParamter::v_size() const {
   return v_.size();
 }
