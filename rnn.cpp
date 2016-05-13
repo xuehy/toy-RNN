@@ -366,6 +366,7 @@ void RNN::train(vector <vector <int>> &X_train, vector <vector <int>> &Y_train,
 	}
       epoch_ = epoch + 1;
     }
+  write("model_trained.snapshot");
 }
 
 void RNN::write(string snapshot)
