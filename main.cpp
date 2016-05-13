@@ -15,8 +15,8 @@ static void interrupt(int signum)
 
 int main()
 {
-  rnn = new RNN(4000,100,1000);
-  //rnn = new RNN("rnn_model.snapshot");
+  //rnn = new RNN(4000,100,1000);
+  rnn = new RNN("rnn_model.snapshot");
   string dataPath = "../kjv12/KJV12.TXT";
   Dataset<int> dataset(dataPath, 4000);
 

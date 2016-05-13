@@ -327,6 +327,7 @@ void RNN::train(vector <vector <int>> &X_train, vector <vector <int>> &Y_train,
     strftime(buf, sizeof(buf), "%Y-%m-%d %X", timeinfo);
     cout << buf << " validation loss = " << val_loss << endl;
   }
+  cout << "continuing..." << endl;
   for(int epoch = epoch_; epoch < nepoch; epoch ++)
     {
       if (epoch % snapshot_interval == 0)
@@ -405,6 +406,7 @@ void RNN::read(string snapshot)
   lr_ = net.learingrate();
   bptt_truncate_ = net.bptt_truncate();
   epoch_ = net.epoch();
+  
   unique_ptr<double[]> U_temp(new double[word_dim_ * hidden_dim_]);
   unique_ptr<double[]> W_temp(new double[hidden_dim_ * hidden_dim_]);
   unique_ptr<double[]> V_temp(new double[word_dim_ * hidden_dim_]);
@@ -418,5 +420,18 @@ void RNN::read(string snapshot)
   U = move(U_temp);
   W = move(W_temp);
   V = move(V_temp);
+
+  unique_ptr<double[]> dU_temp(new double [hidden_dim_ * word_dim_]);
+  unique_ptr<double[]> dV_temp(new double [hidden_dim_ * word_dim_]);
+  unique_ptr<double[]> dW_temp(new double [hidden_dim_ * hidden_dim_]);
+
+  dU = move(dU_temp);
+  dV = move(dV_temp);
+  dW = move(dW_temp);
+
+  fill(dU.get(), dU.get() + hidden_dim_ * word_dim_, 0.0);
+  fill(dV.get(), dV.get() + hidden_dim_ * word_dim_, 0.0);
+  fill(dW.get(), dW.get() + hidden_dim_ * hidden_dim_, 0.0);
+
   google::protobuf::ShutdownProtobufLibrary();
 }
