@@ -318,6 +318,15 @@ void RNN::train(vector <vector <int>> &X_train, vector <vector <int>> &Y_train,
   double loss_last = 10000.0;
   lr_ = learning_rate;
   cout << "start training..." << endl;
+  if (epoch_ != 0) {
+    cout << "continuing training from epoch: " << epoch_ << endl;
+    cout << "learning rate set to " << lr_ << endl;
+    double val_loss = calculate_loss(x_val, y_val);
+    time(&rawtime);
+    timeinfo = localtime(&rawtime);
+    strftime(buf, sizeof(buf), "%Y-%m-%d %X", timeinfo);
+    cout << buf << " validation loss = " << val_loss << endl;
+  }
   for(int epoch = epoch_; epoch < nepoch; epoch ++)
     {
       if (epoch % snapshot_interval == 0)
@@ -330,7 +339,7 @@ void RNN::train(vector <vector <int>> &X_train, vector <vector <int>> &Y_train,
 	  double loss = calculate_loss(X_train, Y_train);
 	  time(&rawtime);
 	  timeinfo = localtime(&rawtime);
-	  strftime(buf, sizeof(buf), "%Y-%m-%d.%X", timeinfo);
+	  strftime(buf, sizeof(buf), "%Y-%m-%d %X", timeinfo);
 	  cout << buf << "  Loss after" << " epoch=" << epoch << ": " << loss << endl;
 	  if (loss > loss_last)
 	    {
@@ -345,11 +354,8 @@ void RNN::train(vector <vector <int>> &X_train, vector <vector <int>> &Y_train,
 	  double val_loss = calculate_loss(x_val, y_val);
 	  time(&rawtime);
 	  timeinfo = localtime(&rawtime);
-	  strftime(buf, sizeof(buf), "%Y-%m-%d.%X", timeinfo);
-
-	  cout << "========================" << endl;
+	  strftime(buf, sizeof(buf), "%Y-%m-%d %X", timeinfo);
 	  cout << buf << " epoch=" << epoch << " validation loss = " << val_loss << endl;
-	  cout << "========================" << endl;
 	}
 
       for(size_t i = 0; i < Y_train.size(); ++i)
