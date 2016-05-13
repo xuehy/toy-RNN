@@ -6,6 +6,7 @@ RNN::RNN(int word_dim, int hidden_dim, double bptt_truncate)
   hidden_dim_ = hidden_dim;
   bptt_truncate_ = bptt_truncate;
   epoch_ = 0;
+  lr_ = 0.005;
   // == initialize model parameters ==
   
   random_device rd;
@@ -315,18 +316,23 @@ void RNN::train(vector <vector <int>> &X_train, vector <vector <int>> &Y_train,
   struct tm *timeinfo;
   char buf[80];
 
-  double loss_last = 10000.0;
-  lr_ = learning_rate;
   cout << "start training..." << endl;
+  double loss_last = 10000.0;
+
+  // this means the model is not at initial state
+  // it is loaded from snapshots
   if (epoch_ != 0) {
     cout << "continuing training from epoch: " << epoch_ << endl;
     cout << "learning rate set to " << lr_ << endl;
+    learning_rate = lr_;
     double val_loss = calculate_loss(x_val, y_val);
     time(&rawtime);
     timeinfo = localtime(&rawtime);
     strftime(buf, sizeof(buf), "%Y-%m-%d %X", timeinfo);
-    cout << buf << " validation loss = " << val_loss << endl;
+    cout << buf << "validation loss = " << val_loss << endl;
   }
+  else
+    lr_ = learning_rate;
   cout << "continuing..." << endl;
   for(int epoch = epoch_; epoch < nepoch; epoch ++)
     {
