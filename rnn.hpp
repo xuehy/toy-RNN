@@ -8,8 +8,12 @@
 #include <utility>
 #include "rnn_math.h"
 #include <iostream>
+#include <fstream>
 #include <iomanip>
 #include <ctime>
+
+#include <csignal>
+#include "net.pb.h"
 using namespace std;
 class RNN
 {
@@ -19,7 +23,10 @@ class RNN
   unique_ptr<double[]> U;
   unique_ptr<double[]> V;
   unique_ptr<double[]> W;
-
+  /**
+   * some solver parameters
+   */
+  double lr_;
   /**
    * internal variable for output and state
    */
@@ -44,6 +51,7 @@ class RNN
   RNN& operator=(const RNN& rnn);
 public:
   RNN(int word_dim, int hidden_dim, double bptt_trun);
+  RNN(string snapshot);
   /**
    * forward of RNN on CPU
    * Our RNN reads one-hot vectors as input
@@ -81,10 +89,24 @@ public:
    */
   void sgd_step(vector <int> &x, vector <int> &y, double learning_rate);
 
+  /**
+   * @snapshot_interval store the net parameters in file every snapshot_interval epochs
+   */
   void train(vector <vector <int>> &X_train, vector <vector <int>> &Y_train,
 	     vector <vector <int>> &x_val, vector <vector <int>> &y_val,
 	     double learning_rate = 0.005, int nepoch = 1000,
-	     int evaluate_loss_after = 50, int val_after = 5000);
+	     int evaluate_loss_after = 50, int val_after = 5000, int snapshot_interval = 50);
+
+  /**
+   * save the model parameters to file 'snapshot'
+   */
+  void write(string snapshot);
+  /**
+   * read parameters and create the model
+   */
+  void read(string snapshot);
+
+
 };
 
 

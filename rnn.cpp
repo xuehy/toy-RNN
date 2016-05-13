@@ -38,6 +38,10 @@ RNN::RNN(int word_dim, int hidden_dim, double bptt_truncate)
 
 }
 
+RNN::RNN(string snapshot)
+{
+  read(snapshot);
+}
 /**
  * @x every element in x represents a word, the value indicates the non-0 index of the one-hot vector
  */
@@ -303,36 +307,48 @@ void RNN::sgd_step(vector <int> &x, vector <int> &y, double learning_rate)
 
 void RNN::train(vector <vector <int>> &X_train, vector <vector <int>> &Y_train,
 		vector <vector <int>> &x_val, vector <vector <int>> &y_val,
-		double learning_rate, int nepoch, int evaluate_loss_after, int val_after)
+		double learning_rate, int nepoch, int evaluate_loss_after, int val_after,
+		int snapshot_interval)
 {
   // for every epoch
   time_t rawtime;
   struct tm *timeinfo;
+  char buf[80];
 
   double loss_last = 100.0;
-  int step = 0;
+  lr_ = learning_rate;
   cout << "start training..." << endl;
   for(int epoch = 0; epoch < nepoch; epoch ++)
     {
+      if (epoch % snapshot_interval == 0)
+	{
+	  string snapshot_filename = "rnnmodel_" + to_string(epoch) + ".snapshot";
+	  write(snapshot_filename);
+	}
       if (epoch % evaluate_loss_after == 0)
 	{
 	  double loss = calculate_loss(X_train, Y_train);
 	  time(&rawtime);
 	  timeinfo = localtime(&rawtime);
-	  cout << asctime(timeinfo);
-	  cout << "  Loss after" << " epoch=" << epoch << " " << loss << endl;
+	  strftime(buf, sizeof(buf), "%Y-%m-%d.%X", timeinfo);
+	  cout << buf << "  Loss after" << " epoch=" << epoch << ": " << loss << endl;
 	  if (loss > loss_last)
 	    {
 	      learning_rate *= 0.5;
-	      cout << "set learning rate to " << learning_rate << endl;
+	      lr_ = learning_rate;
+	      cout << "   [notice] set learning rate to " << learning_rate << endl;
 	    }
 	  loss_last = loss;
 	}
       if (epoch % val_after == 0)
         {
 	  double val_loss = calculate_loss(x_val, y_val);
+	  time(&rawtime);
+	  timeinfo = localtime(&rawtime);
+	  strftime(buf, sizeof(buf), "%Y-%m-%d.%X", timeinfo);
+
 	  cout << "========================" << endl;
-	  cout << "validation loss = " << val_loss << endl;
+	  cout << buf << " epoch=" << epoch << " validation loss = " << val_loss << endl;
 	  cout << "========================" << endl;
 	}
 
@@ -342,4 +358,56 @@ void RNN::train(vector <vector <int>> &X_train, vector <vector <int>> &Y_train,
 	  
 	}
     }
+}
+
+void RNN::write(string snapshot)
+{
+  GOOGLE_PROTOBUF_VERIFY_VERSION;
+  NetParamter net;
+  net.set_hidden_dim(hidden_dim_);
+  net.set_word_dim(word_dim_);
+  net.set_learingrate(lr_);
+  net.set_bptt_truncate(bptt_truncate_);
+  for(int i = 0; i < word_dim_ * hidden_dim_; ++i)
+    {
+      net.add_u(U[i]);
+      net.add_v(V[i]);
+    }
+  for(int i = 0; i < hidden_dim_ * hidden_dim_; ++i)
+    {
+      net.add_w(W[i]);
+    }
+
+  fstream output(snapshot, ios::binary | ios::out | ios::trunc);
+  net.SerializeToOstream(&output);
+  output.close();
+  google::protobuf::ShutdownProtobufLibrary();
+}
+
+void RNN::read(string snapshot)
+{
+  GOOGLE_PROTOBUF_VERIFY_VERSION;
+  NetParamter net;
+  fstream input(snapshot, ios::in | ios::binary);
+  net.ParseFromIstream(&input);
+  input.close();
+  
+  word_dim_ = net.word_dim();
+  hidden_dim_ = net.hidden_dim();
+  lr_ = net.learingrate();
+  bptt_truncate_ = net.bptt_truncate();
+  unique_ptr<double[]> U_temp(new double[word_dim_ * hidden_dim_]);
+  unique_ptr<double[]> W_temp(new double[hidden_dim_ * hidden_dim_]);
+  unique_ptr<double[]> V_temp(new double[word_dim_ * hidden_dim_]);
+  for(int i = 0; i < word_dim_ * hidden_dim_; ++i)
+    {
+      U_temp[i] = net.u(i);
+      V_temp[i] = net.v(i);
+    }
+  for(int j = 0; j < hidden_dim_ * hidden_dim_; ++j)
+    W_temp[j] = net.w(j);
+  U = move(U_temp);
+  W = move(W_temp);
+  V = move(V_temp);
+  google::protobuf::ShutdownProtobufLibrary();
 }
