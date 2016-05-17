@@ -18,12 +18,38 @@ int main()
   cout.setf(ios::fixed);
   cout << setprecision(10);
 
+  // == test rnn_gpu_xxx ==
+  cudaError_t cudaStat;
+  cublasStatus_t stat;
+  cublasHandle_t handle;
+  float A[] = {1,2,3,4,5,6,7,8,9,10,11,12};
+  float x[] = {1,2,3,4};
+  float y[] = {3,4,5};
+  float *dev_A, *dev_x, *dev_y;
+  cudaMalloc((void**)&dev_A, 12 * sizeof(float));
+  cudaMalloc((void**)&dev_x, 4 * sizeof(float));
+  cudaMalloc((void**)&dev_y, 3 * sizeof(float));
+  cublasSetVector(12, sizeof(float), A, 1, dev_A, 1);
+  cublasSetVector(4, sizeof(float), x, 1, dev_x, 1);
+  cublasSetVector(3, sizeof(float), y, 1, dev_y, 1);
+  cublasCreate(&handle);
+  float alpha = 1.0;
+  //  rnn_gpu_ger(handle, 4, 3, &alpha, dev_x, dev_y, dev_A);
+  rnn_gpu_gemv<float>(handle, CblasNoTrans, 4, 3, &alpha, dev_A, dev_y, &alpha, dev_x);
+  //  cublasGetVector(12, sizeof(float), dev_A, 1, A, 1);
+  //  for(int i = 0; i < 12; ++i) cout << A[i] << endl;
+  cublasGetVector(4, sizeof(float), dev_x, 1, x, 1);
+  for(int i = 0; i < 4; ++i) cout << x[i] << endl;
+  cudaFree(dev_A);
+  cudaFree(dev_x);
+  cudaFree(dev_y);
+  cublasDestroy(handle);
   // gradient check
   int grad_check_vocab_size = 250;
   RNN<double> rnn_check(grad_check_vocab_size, 10, 1000);
-  vector <int> x{0,1,2,3,4};
-  vector <int> y{1,2,3,4,5};
-  rnn_check.gradient_check(x,y);
+  vector <int> xx{0,1,2,3,4};
+  vector <int> yy{1,2,3,4,5};
+  rnn_check.gradient_check(xx,yy);
 
   return 0;
   rnn = new RNN<double>(4000,100,1000);
