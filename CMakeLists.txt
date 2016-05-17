@@ -14,7 +14,7 @@ set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS} ${CBLAS_CXX_FLAGS}"
 set(CMAKE_BUILD_TYPE Release)
 
 
-file(GLOB PRE_SRC_FILES "*.cpp" "*.cc")
+file(GLOB PRE_SRC_FILES "*.cpp" "*.cc" "*.hpp")
 add_executable(rnn ${PRE_SRC_FILES})
 
 target_link_libraries(rnn cblas protobuf)

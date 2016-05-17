@@ -3,7 +3,7 @@
 #include "dataset.cpp"
 
 using namespace std;
-RNN *rnn;
+RNN<double> *rnn;
 
 static void interrupt(int signum)
 {
@@ -15,7 +15,18 @@ static void interrupt(int signum)
 
 int main()
 {
-  rnn = new RNN(4000,100,1000);
+  cout.setf(ios::fixed);
+  cout << setprecision(10);
+
+  // gradient check
+  int grad_check_vocab_size = 250;
+  RNN<double> rnn_check(grad_check_vocab_size, 10, 1000);
+  vector <int> x{0,1,2,3,4};
+  vector <int> y{1,2,3,4,5};
+  rnn_check.gradient_check(x,y);
+
+  return 0;
+  rnn = new RNN<double>(4000,100,1000);
   //rnn = new RNN("rnn_model.snapshot");
   string dataPath = "../kjv12/KJV12.TXT";
   Dataset<int> dataset(dataPath, 4000);
@@ -70,15 +81,7 @@ int main()
       copy(dataset.sentences[ind].begin(), dataset.sentences[ind].end() - 1, X_train[i].begin());
       copy(dataset.sentences[ind].begin() + 1, dataset.sentences[ind].end(), y_train[i].begin());
     }
-  cout.setf(ios::fixed);
-  cout << setprecision(10);
 
-  // gradient check
-  // int grad_check_vocab_size = 100;
-  // RNN rnn_check(grad_check_vocab_size, 10, 1000);
-  // vector <int> x{0,1,2,3};
-  // vector <int> y{1,2,3,4};
-  // rnn_check.gradient_check(x,y);
 
   signal(SIGINT, interrupt);
   rnn -> train(X_train, y_train, x_val, y_val, 0.005, 1000, 5, 9, 15);
