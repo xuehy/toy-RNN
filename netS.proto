@@ -1,0 +1,10 @@
+message NetParamterS {
+  required fixed32 word_dim = 1;
+  required fixed32 hidden_dim = 2;
+  required fixed32 bptt_truncate = 3;
+  required fixed32 epoch = 4;
+  optional float learingRate = 5;
+  repeated float U = 6 [packed=true];
+  repeated float W = 7 [packed=true];
+  repeated float V = 8 [packed=true];
+}
