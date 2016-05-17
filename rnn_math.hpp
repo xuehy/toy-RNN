@@ -4,6 +4,7 @@
 #include <cmath>
 #include <numeric>
 using namespace std;
+
 /**
  * softmax function
  * @input input vector
@@ -40,6 +41,7 @@ void rnn_math_gemv<float>(CBLAS_ORDER order, CBLAS_TRANSPOSE Trans, int M, int N
   cblas_sgemv(order, Trans, M, N, alpha, A, lda, X, 1, beta, Y, 1);
 }
 
+
 template <typename DTYPE>
 void rnn_math_copy(int N, DTYPE *X, DTYPE *Y){}
 
@@ -55,6 +57,7 @@ void rnn_math_copy<float>(int N, float *X, float *Y)
   cblas_scopy(N, X, 1, Y, 1);
 }
 
+
 template <typename DTYPE>
 void rnn_math_scal(int N, DTYPE alpha, DTYPE *X){exit(1);}
 
@@ -69,6 +72,7 @@ void rnn_math_scal<float>(int N, float alpha, float *X)
 {
   cblas_sscal(N, alpha, X, 1);
 }
+
 
 template <typename DTYPE>
 void rnn_math_ger(CBLAS_ORDER order,
@@ -102,4 +106,5 @@ void rnn_math_axpy<float>(int N, float alpha, float *X, float *Y)
 {
   cblas_saxpy(N, alpha, X, 1, Y, 1);
 }
+
 #endif
