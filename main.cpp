@@ -47,6 +47,9 @@ int main()
   // gradient check
   int grad_check_vocab_size = 250;
   RNN<double> rnn_check(grad_check_vocab_size, 10, 1000);
+  mode md = GPU;
+  rnn_check.set_mode(md);
+  rnn_check.initialize();
   vector <int> xx{0,1,2,3,4};
   vector <int> yy{1,2,3,4,5};
   rnn_check.gradient_check(xx,yy);

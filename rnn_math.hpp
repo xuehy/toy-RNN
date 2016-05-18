@@ -3,11 +3,12 @@
 #include <algorithm>
 #include <cmath>
 #include <numeric>
+#include <cfloat>
 #include <cblas.h>
 #include <cublas_v2.h>
 #include <cuda_runtime.h>
+#include "device_alternate.hpp"
 using namespace std;
-
 /**
  * softmax function
  * @input input vector
@@ -41,8 +42,8 @@ void rnn_math_ger(CBLAS_ORDER order,
 		  int M, int N, DTYPE alpha, DTYPE *X, DTYPE *Y, DTYPE *A, int lda);
 
 template <typename DTYPE>
-void rnn_math_axpy(int N, DTYPE alpha, DTYPE *X, DTYPE *Y);
-
+void rnn_math_axpy(int N, DTYPE alpha, DTYPE *X, DTYPE *Y)
+;
 template <typename DTYPE>
 void rnn_gpu_gemv(cublasHandle_t handle, CBLAS_TRANSPOSE trans,
 		  int m, int n,
@@ -65,5 +66,16 @@ void rnn_gpu_ger(cublasHandle_t handle,
 template <typename DTYPE>
 void rnn_gpu_axpy(cublasHandle_t handle, int N, DTYPE *alpha, DTYPE *X, DTYPE *Y);
 
+template <typename DTYPE>
+void rnn_gpu_set(cublasHandle_t handle, int N, const DTYPE *X, DTYPE *Y);
+
+template <typename DTYPE>
+void rnn_gpu_get(cublasHandle_t handle, int N, const DTYPE *X, DTYPE *Y);
+
+template <typename DTYPE>
+void rnn_gpu_tanh(const int N, const DTYPE *X, DTYPE *Y);
+
+template <typename DTYPE>
+void rnn_gpu_softmax(const int N, const DTYPE *X, DTYPE *Y);
 #include "rnn_math.hpp"
 #endif
