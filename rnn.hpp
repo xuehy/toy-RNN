@@ -60,6 +60,8 @@ class RNN
   DTYPE *dev_o_;
   DTYPE *dev_s_;
   DTYPE *dev_Vs_t;
+  DTYPE *dev_ws;
+  DTYPE *dev_ds;
   /**
    * gradient for V
    */
@@ -111,29 +113,35 @@ public:
    * @return the total loss
    */
   DTYPE calculate_total_loss(vector <vector <int>> &x, vector <vector <int>> &y);
-
+  DTYPE calculate_total_loss_gpu(vector <vector <int>> &x, vector <vector <int>> &y);
   /**
    * divide the total loss by the number of training samples
    */
   DTYPE calculate_loss(vector <vector <int>> &x, vector <vector <int>> &y);
-
+  DTYPE calculate_loss_gpu(vector <vector <int>> &x, vector <vector <int>> &y);
   /**
    * backpropagation through time
    * @x a sentence
    * @y label
    */
+  void syncHosttoDevice();
   void bptt(vector <int> &x, vector <int> &y);
+  void bptt_gpu(vector <int> &x, vector <int> &y);
   void gradient_check(vector <int> &x, vector <int> &y, DTYPE h = 0.001, DTYPE err_thres = 0.01);
-
+  void gradient_check_gpu(vector <int> &x, vector <int> &y, DTYPE h = 0.001, DTYPE err_thres = 0.01);
   /**
    * Perform one step of SGD
    */
   void sgd_step(vector <int> &x, vector <int> &y, DTYPE learning_rate);
-
+  void sgd_step_gpu(vector <int> &x, vector <int> &y, DTYPE learning_rate);
   /**
    * @snapshot_interval store the net parameters in file every snapshot_interval epochs
    */
   void train(vector <vector <int>> &X_train, vector <vector <int>> &Y_train,
+	     vector <vector <int>> &x_val, vector <vector <int>> &y_val,
+	     DTYPE learning_rate = 0.005, int nepoch = 1000,
+	     int evaluate_loss_after = 50, int val_after = 5000, int snapshot_interval = 50);
+  void train_gpu(vector <vector <int>> &X_train, vector <vector <int>> &Y_train,
 	     vector <vector <int>> &x_val, vector <vector <int>> &y_val,
 	     DTYPE learning_rate = 0.005, int nepoch = 1000,
 	     int evaluate_loss_after = 50, int val_after = 5000, int snapshot_interval = 50);

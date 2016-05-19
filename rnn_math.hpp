@@ -77,5 +77,14 @@ void rnn_gpu_tanh(const int N, const DTYPE *X, DTYPE *Y);
 
 template <typename DTYPE>
 void rnn_gpu_softmax(const int N, const DTYPE *X, DTYPE *Y);
-#include "rnn_math.hpp"
+
+// following functions are layer specific
+template <typename DTYPE>
+void softmax_grad_gpu(DTYPE *input, int *y, const int word_dim_, const int T);
+
+template <typename DTYPE>
+void tanh_grad_gpu(DTYPE *input1, DTYPE *input2, DTYPE *output, int N);
+
+
+//#include "rnn_math.cpp"
 #endif

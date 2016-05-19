@@ -10,8 +10,8 @@ RNN<DTYPE>::RNN(int word_dim, int hidden_dim, int bptt_truncate)
   
   random_device rd;
   //  mt19937 gen(rd());
-  mt19937 gen;
-  gen.seed(2000);
+  mt19937 gen(rd());
+
   uniform_real_distribution<DTYPE> dis1(-1.0/sqrt(word_dim_), 1.0/sqrt(word_dim_));
   uniform_real_distribution<DTYPE> dis2(-1.0/sqrt(hidden_dim_), 1.0/sqrt(hidden_dim_));
   unique_ptr<DTYPE[]> U_temp(new DTYPE [hidden_dim_ * word_dim_]);
@@ -52,6 +52,7 @@ template <typename DTYPE>
 void RNN<DTYPE>::set_mode(mode solver_mode)
 {
   solver_mode_ = solver_mode;
+  if(solver_mode_ == GPU) initialize();
 }
 
 template <typename DTYPE>
@@ -107,6 +108,10 @@ void RNN<DTYPE>::initialize()
       // cudaStat = cudaMalloc((void**)&dev_s_, hidden_dim_ * sizeof(DTYPE));
       // cuda_check();
 
+      cudaStat = cudaMalloc((void**)&dev_ws, hidden_dim_ * sizeof(DTYPE));
+      cuda_check();
+      cudaStat = cudaMalloc((void**)&dev_ds, hidden_dim_ * sizeof(DTYPE));
+      cuda_check();
       rnn_gpu_set<DTYPE>(handle, hidden_dim_ * word_dim_, U.get(), dev_U);
       rnn_gpu_set<DTYPE>(handle, hidden_dim_ * word_dim_, V.get(), dev_V);
       rnn_gpu_set<DTYPE>(handle, hidden_dim_ * hidden_dim_, W.get(), dev_W);
@@ -115,6 +120,18 @@ void RNN<DTYPE>::initialize()
       rnn_gpu_set<DTYPE>(handle, hidden_dim_ * word_dim_, dV.get(), dev_dV);
       rnn_gpu_set<DTYPE>(handle, hidden_dim_ * hidden_dim_, dW.get(), dev_dW);
     }
+}
+
+template <typename DTYPE>
+void RNN<DTYPE>::syncHosttoDevice()
+{
+  rnn_gpu_set<DTYPE>(handle, hidden_dim_ * word_dim_, U.get(), dev_U);
+  rnn_gpu_set<DTYPE>(handle, hidden_dim_ * word_dim_, V.get(), dev_V);
+  rnn_gpu_set<DTYPE>(handle, hidden_dim_ * hidden_dim_, W.get(), dev_W);
+
+  rnn_gpu_set<DTYPE>(handle, hidden_dim_ * word_dim_, dU.get(), dev_dU);
+  rnn_gpu_set<DTYPE>(handle, hidden_dim_ * word_dim_, dV.get(), dev_dV);
+  rnn_gpu_set<DTYPE>(handle, hidden_dim_ * hidden_dim_, dW.get(), dev_dW);
 }
 
 template <typename DTYPE>
@@ -129,6 +146,9 @@ RNN<DTYPE>::~RNN()
       cudaFree(dev_U);
       cudaFree(dev_V);
       cudaFree(dev_W);
+      cudaFree(dev_Vs_t);
+      cudaFree(dev_ws);
+      cudaFree(dev_ds);
       cublasDestroy(handle);
     }
 }
@@ -247,6 +267,30 @@ DTYPE RNN<DTYPE>::calculate_total_loss(vector <vector <int>> &x, vector <vector 
     }
   return L;
 }
+
+template <typename DTYPE>
+DTYPE RNN<DTYPE>::calculate_total_loss_gpu(vector <vector <int>> &x, vector <vector <int>> &y)
+{
+  DTYPE L = 0.0;
+    // for ith training sample
+  for(size_t i = 0; i < y.size(); ++i)
+    {
+      //      finalize();
+      forward_gpu(x[i]);
+      unique_ptr<DTYPE[]> o_temp(new DTYPE[word_dim_ * y[i].size()]);
+      rnn_gpu_get(handle, word_dim_ * y[i].size(), dev_o_, o_temp.get());
+      cudaFree(dev_o_);
+      cudaFree(dev_s_);
+        // for jth word
+      DTYPE loss = 0.0;
+      
+      for(size_t j = 0; j < y[i].size(); ++j)
+	loss += log(o_temp[j * word_dim_ + y[i][j]]);
+      L += -1 * loss;
+    }
+  return L;
+}
+
 template <typename DTYPE>
 DTYPE RNN<DTYPE>::calculate_loss(vector <vector <int>> &x, vector <vector <int>> &y)
 {
@@ -254,6 +298,15 @@ DTYPE RNN<DTYPE>::calculate_loss(vector <vector <int>> &x, vector <vector <int>>
   for(size_t i = 0; i < y.size(); ++i)
     N += y[i].size();
   return calculate_total_loss(x,y) / N;
+}
+
+template <typename DTYPE>
+DTYPE RNN<DTYPE>::calculate_loss_gpu(vector <vector <int>> &x, vector <vector <int>> &y)
+{
+  int N = 0;
+  for(size_t i = 0; i < y.size(); ++i)
+    N += y[i].size();
+  return calculate_total_loss_gpu(x,y) / N;
 }
 
 template <typename DTYPE>
@@ -266,7 +319,7 @@ void RNN<DTYPE>::bptt(vector <int> &x, vector <int> &y)
 
   int T = y.size();
   // perform forward propagation
-  forward_gpu(x);
+  forward_cpu(x);
 
   unique_ptr<DTYPE[]> delta_o_ptr(new DTYPE[T * word_dim_]);
   rnn_math_copy<DTYPE>(T * word_dim_, o_.get(), delta_o_ptr.get());
@@ -409,6 +462,108 @@ void RNN<DTYPE>::gradient_check(vector <int> &x, vector <int> &y, DTYPE h, DTYPE
   cout << "Gradient check for parameter U passed" << endl;
 }
 
+template <typename DTYPE>
+void RNN<DTYPE>::gradient_check_gpu(vector <int> &x, vector <int> &y, DTYPE h, DTYPE err_thres)
+{
+  bptt_gpu(x,y);
+  finalize();
+  cout << "Performing gradient check on GPU for parameter V with size " << hidden_dim_ * word_dim_ << endl;
+
+  vector <vector <int>> X;
+  vector <vector <int>> Y;
+  X.push_back(x);
+  Y.push_back(y);
+
+  // check gradients for V
+  for(int ix = 0; ix < hidden_dim_ * word_dim_; ++ix)
+    {
+      DTYPE original_value = V[ix];
+      V[ix] = original_value + h;
+
+      syncHosttoDevice();
+
+      DTYPE grad_plus = calculate_total_loss_gpu(X, Y);
+      V[ix] = original_value - h;
+      syncHosttoDevice();
+
+      DTYPE grad_minus = calculate_total_loss_gpu(X, Y);
+      DTYPE estimated_gradient = (grad_plus - grad_minus) / (2 * h);
+      V[ix] = original_value;
+      syncHosttoDevice();      
+
+      DTYPE backprop_gradient = dV[ix];
+      DTYPE relative_error = abs(backprop_gradient - estimated_gradient) / (abs(backprop_gradient) + abs(estimated_gradient));
+      if (relative_error > err_thres)
+	{
+	  cout << "Gradient Check ERROR: parameter=V ix=" << ix << endl;
+	  cout << "+h Loss: " << grad_plus << endl;
+	  cout << "-h Loss: " << grad_minus << endl;
+	  cout << "Estimated_gradient: " << estimated_gradient << endl;
+	  cout << "Backpropagation gradient: " << backprop_gradient << endl;
+	  cout << "Relative Error: " << relative_error << endl;
+	  return ;
+	}
+    }
+  cout << "Gradient check for parameter V passed" << endl;
+
+    // check gradients for W
+  for(int ix = 0; ix < hidden_dim_ * hidden_dim_; ++ix)
+    {
+      DTYPE original_value = W[ix];
+      W[ix] = original_value + h;
+      syncHosttoDevice();
+      DTYPE grad_plus = calculate_total_loss_gpu(X, Y);
+      W[ix] = original_value - h;
+      syncHosttoDevice();
+      DTYPE grad_minus = calculate_total_loss_gpu(X, Y);
+      DTYPE estimated_gradient = (grad_plus - grad_minus) / (2 * h);
+      W[ix] = original_value;
+      syncHosttoDevice();
+      DTYPE backprop_gradient = dW[ix];
+      DTYPE relative_error = abs(backprop_gradient - estimated_gradient) / (abs(backprop_gradient) + abs(estimated_gradient));
+      if (relative_error > err_thres)
+	{
+	  cout << "Gradient Check ERROR: parameter=W ix=" << ix << endl;
+	  cout << "+h Loss: " << grad_plus << endl;
+	  cout << "-h Loss: " << grad_minus << endl;
+	  cout << "Estimated_gradient: " << estimated_gradient << endl;
+	  cout << "Backpropagation gradient: " << backprop_gradient << endl;
+	  cout << "Relative Error: " << relative_error << endl;
+	  return;
+	}
+    }
+  cout << "Gradient check for parameter W passed" << endl;
+
+  // check gradients for U
+  for(int ix = 0; ix < word_dim_ * hidden_dim_; ++ix)
+    {
+      DTYPE original_value = U[ix];
+      U[ix] = original_value + h;
+      syncHosttoDevice();
+      DTYPE grad_plus = calculate_total_loss_gpu(X, Y);
+      U[ix] = original_value - h;
+      syncHosttoDevice();
+      DTYPE grad_minus = calculate_total_loss_gpu(X, Y);
+      DTYPE estimated_gradient = (grad_plus - grad_minus) / (2 * h);
+      U[ix] = original_value;
+      syncHosttoDevice();
+      DTYPE backprop_gradient = dU[ix];
+      DTYPE relative_error = abs(backprop_gradient - estimated_gradient) / (abs(backprop_gradient) + abs(estimated_gradient));
+      if (relative_error > err_thres || abs(backprop_gradient) > 10.0)
+	{
+	  cout << "Gradient Check ERROR: parameter=U ix=" << ix << endl;
+	  cout << "+h Loss: " << grad_plus << endl;
+	  cout << "-h Loss: " << grad_minus << endl;
+	  cout << "Estimated_gradient: " << estimated_gradient << endl;
+	  cout << "Backpropagation gradient: " << backprop_gradient << endl;
+	  cout << "Relative Error: " << relative_error << endl;
+	  return ;
+	}
+    }
+  cout << "Gradient check for parameter U passed" << endl;
+
+}
+
 template <>
 void RNN<float>::gradient_check(vector <int> &x, vector <int> &y, float h, float err_thres)
 {
@@ -422,6 +577,16 @@ void RNN<DTYPE>::sgd_step(vector <int> &x, vector <int> &y, DTYPE learning_rate)
   rnn_math_axpy<DTYPE>(word_dim_ * hidden_dim_, -learning_rate, dU.get(), U.get());
   rnn_math_axpy<DTYPE>(word_dim_ * hidden_dim_, -learning_rate, dV.get(), V.get());
   rnn_math_axpy<DTYPE>(hidden_dim_ * hidden_dim_, -learning_rate, dW.get(), W.get());
+}
+
+template <typename DTYPE>
+void RNN<DTYPE>::sgd_step_gpu(vector <int> &x, vector <int> &y, DTYPE learning_rate)
+{
+  bptt_gpu(x,y);
+  DTYPE lr = -learning_rate;
+  rnn_gpu_axpy<DTYPE>(handle, word_dim_ * hidden_dim_, &lr, dev_dU, dev_U);
+  rnn_gpu_axpy<DTYPE>(handle, word_dim_ * hidden_dim_, &lr, dev_dV, dev_V);
+  rnn_gpu_axpy<DTYPE>(handle, hidden_dim_ * hidden_dim_, &lr, dev_dW, dev_W);
 }
 
 template <typename DTYPE>
@@ -506,6 +671,7 @@ void RNN<DTYPE>::finalize()
       rnn_gpu_get<DTYPE>(handle, word_dim_ * hidden_dim_, dev_U, U.get());
       rnn_gpu_get<DTYPE>(handle, word_dim_ * hidden_dim_, dev_V, V.get());
       rnn_gpu_get<DTYPE>(handle, hidden_dim_ * hidden_dim_, dev_W, W.get());
+      rnn_gpu_get<DTYPE>(handle, word_dim_ , dev_o_, o_.get());
     }
 }
 
@@ -706,7 +872,6 @@ void RNN<DTYPE>::forward_gpu(vector <int> &x)
 
   rnn_gpu_softmax<DTYPE>(word_dim_, dev_Vs_t, o_t);
 
-  cout << "fine" << endl;
   for(t = 1; t < T; ++t)
     {
       rnn_gpu_scal<DTYPE>(handle, word_dim_, &zero, dev_Vs_t);
@@ -724,13 +889,155 @@ void RNN<DTYPE>::forward_gpu(vector <int> &x)
       rnn_gpu_gemv<DTYPE>(handle, CblasNoTrans, word_dim_, hidden_dim_, &one, dev_V, s_t, &zero, dev_Vs_t);
       rnn_gpu_softmax<DTYPE>(word_dim_, dev_Vs_t, o_t);
     }
-  unique_ptr<DTYPE[]> s(new DTYPE[(T + 1) * hidden_dim_]);
-  unique_ptr<DTYPE[]> o(new DTYPE[T * word_dim_]);
+}
 
-  rnn_gpu_get(handle, (T+1)*hidden_dim_, dev_s_, s.get());
-  rnn_gpu_get(handle, T * word_dim_, dev_o_, o.get());
-  s_ = move(s);
-  o_ = move(o);
-  cout << "s[0] = " << s_[0] << endl;
-  cout << "o[0] = " << o_[0] << endl;
+template <typename DTYPE>
+void RNN<DTYPE>::bptt_gpu(vector <int> &x, vector <int> &y)
+{
+  // clear dU dV dW
+  DTYPE zero = 0.0;
+  DTYPE one = 1.0;
+  rnn_gpu_scal<DTYPE>(handle, hidden_dim_ * word_dim_, &zero, dev_dU);
+  rnn_gpu_scal<DTYPE>(handle, hidden_dim_ * word_dim_, &zero, dev_dV);
+  rnn_gpu_scal<DTYPE>(handle, hidden_dim_ * hidden_dim_, &zero, dev_dW);
+
+  int T = y.size();
+  // perform forward propagation
+  forward_gpu(x);
+
+  DTYPE *dev_delta_o;
+  cudaStat = cudaMalloc((void**)&dev_delta_o, T * word_dim_ * sizeof(DTYPE));
+  cuda_check();
+  rnn_gpu_copy<DTYPE>(handle, T * word_dim_, dev_o_, dev_delta_o);
+
+  int *dev_y;
+  cudaStat = cudaMalloc((void**)&dev_y, T * sizeof(int));
+  cuda_check();
+
+  int *yy = new int[T];
+  for(int i = 0; i < T; ++i) yy[i] = y[i];
+  
+  rnn_gpu_set<int>(handle, T, yy, dev_y);
+  delete []yy;
+  softmax_grad_gpu<DTYPE>(dev_delta_o, dev_y, word_dim_, T);
+
+  rnn_gpu_scal(handle, hidden_dim_, &zero, dev_ds);
+  
+  // for every time step (word)
+  for(int t = T - 1; t >= 0; t--)
+    {
+      // dV = (o_t - y_t) x s_t
+      // gradient for V (correct)
+      rnn_gpu_ger<DTYPE>(handle, word_dim_, hidden_dim_, &one, dev_delta_o + t * word_dim_, dev_s_ + t * hidden_dim_, dev_dV);
+
+      
+      // // gradient for W
+      DTYPE *delta_o_t = dev_delta_o + t * word_dim_;
+      rnn_gpu_scal<DTYPE>(handle, hidden_dim_, &zero, dev_ds);
+
+      // V^T * delta_o_t -> ds
+
+      rnn_gpu_gemv<DTYPE>(handle, CblasTrans, word_dim_, hidden_dim_, &one, dev_V, delta_o_t, &zero, dev_ds);
+
+      DTYPE *s_t = dev_s_ + t * hidden_dim_;
+      // ds * ( 1 - s_t ** 2) -> ds
+      tanh_grad_gpu<DTYPE>(dev_ds, s_t, dev_ds, hidden_dim_);
+
+      for(int bptt_step = t; bptt_step >= max(0, t - (int)bptt_truncate_); bptt_step --)
+      	{
+	  DTYPE *s_bptt_step_1 = (bptt_step - 1 < 0)? dev_s_ + T * hidden_dim_ : dev_s_ + (bptt_step - 1) * hidden_dim_;
+      	  // dW
+	  rnn_gpu_ger<DTYPE>(handle, hidden_dim_, hidden_dim_, &one, dev_ds, s_bptt_step_1, dev_dW);
+
+
+      	  // gradient for U
+	  
+      	  DTYPE *dU_step = dev_dU + x[bptt_step] * hidden_dim_;
+	  rnn_gpu_axpy<DTYPE>(handle, hidden_dim_, &one, dev_ds, dU_step);
+
+      	  // update ds
+
+	  rnn_gpu_gemv<DTYPE>(handle, CblasTrans, hidden_dim_, hidden_dim_, &one, dev_W, dev_ds, &zero, dev_ws);
+	  tanh_grad_gpu<DTYPE>(dev_ws, s_bptt_step_1, dev_ds, hidden_dim_);
+      	}
+    }
+  cudaFree(dev_o_);
+  cudaFree(dev_s_);
+  cudaFree(dev_delta_o);
+  cudaFree(dev_y);
+
+}
+
+template <typename DTYPE>
+void RNN<DTYPE>::train_gpu(vector <vector <int>> &X_train, vector <vector <int>> &Y_train,
+		vector <vector <int>> &x_val, vector <vector <int>> &y_val,
+		DTYPE learning_rate, int nepoch, int evaluate_loss_after, int val_after,
+		int snapshot_interval)
+{
+  // for every epoch
+  time_t rawtime;
+  struct tm *timeinfo;
+  char buf[80];
+
+  cout << "start training..." << endl;
+  DTYPE loss_last = 10000.0;
+
+  // this means the model is not at initial state
+  // it is loaded from snapshots
+  if (epoch_ != 0) {
+    cout << "continuing training from epoch: " << epoch_ << endl;
+    cout << "learning rate set to " << lr_ << endl;
+    learning_rate = lr_;
+    DTYPE val_loss = calculate_loss_gpu(x_val, y_val);
+    time(&rawtime);
+    timeinfo = localtime(&rawtime);
+    strftime(buf, sizeof(buf), "%Y-%m-%d %X", timeinfo);
+    cout << buf << "validation loss = " << val_loss << endl;
+  }
+  else
+    lr_ = learning_rate;
+  cout << "continuing..." << endl;
+  for(int epoch = epoch_; epoch < nepoch; epoch ++)
+    {
+      if (epoch % snapshot_interval == 0)
+	{
+	  string snapshot_filename = "rnnmodel_" + to_string(epoch) + ".snapshot";
+	  finalize();
+	  write(snapshot_filename);
+	}
+      if (epoch % evaluate_loss_after == 0)
+	{
+	  cout << "== evaluating loss == " << endl;
+	  DTYPE loss = calculate_loss_gpu(X_train, Y_train);
+	  time(&rawtime);
+	  timeinfo = localtime(&rawtime);
+	  strftime(buf, sizeof(buf), "%Y-%m-%d %X", timeinfo);
+	  cout << buf << "  Loss after" << " epoch=" << epoch << ": " << loss << endl;
+	  if (loss > loss_last)
+	    {
+	      learning_rate *= 0.5;
+	      lr_ = learning_rate;
+	      cout << "   [notice] set learning rate to " << learning_rate << endl;
+	    }
+	  loss_last = loss;
+	}
+      if (epoch % val_after == 0)
+        {
+	  DTYPE val_loss = calculate_loss_gpu(x_val, y_val);
+	  time(&rawtime);
+	  timeinfo = localtime(&rawtime);
+	  strftime(buf, sizeof(buf), "%Y-%m-%d %X", timeinfo);
+	  cout << buf << " epoch=" << epoch << " validation loss = " << val_loss << endl;
+	}
+
+      for(size_t i = 0; i < Y_train.size(); ++i)
+
+	{
+	  sgd_step_gpu(X_train[i], Y_train[i], learning_rate);
+	  
+	}
+      epoch_ = epoch + 1;
+    }
+  finalize();
+  write("model_trained.snapshot");
 }

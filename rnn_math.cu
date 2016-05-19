@@ -77,13 +77,19 @@ void rnn_gpu_axpy<float>(cublasHandle_t handle, int N, float *alpha, float *X, f
 }
 
 template <>
-void rnn_gpu_set(cublasHandle_t handle, int N, const double *X, double *Y)
+void rnn_gpu_set<int>(cublasHandle_t handle, int N, const int *X, int *Y)
+{
+  cublasSetVector(N, sizeof(int), X, 1, Y, 1);
+}
+
+template <>
+void rnn_gpu_set<double>(cublasHandle_t handle, int N, const double *X, double *Y)
 {
   cublasSetVector(N, sizeof(double), X, 1, Y, 1);
 }
 
 template <>
-void rnn_gpu_set(cublasHandle_t handle, int N, const float *X, float *Y)
+void rnn_gpu_set<float>(cublasHandle_t handle, int N, const float *X, float *Y)
 {
   cublasSetVector(N, sizeof(float), X, 1, Y, 1);
 }
@@ -211,3 +217,48 @@ void rnn_gpu_softmax<double>(const int N, const double *X, double *Y)
   kernel_div_scalar<double><<<RNN_GET_BLOCKS(N), RNN_CUDA_NUM_THREADS>>>(maxval, Y, Y, N);
   cudaFree(maxval);
 }
+
+// == the following functions are layer-specific
+// this function is ugly
+template <typename DTYPE>
+__global__ void kernel_softmax_grad(DTYPE *input, int *y, const int word_dim, const int T)
+{
+  CUDA_KERNEL_LOOP(index, T)
+    {
+      input[index*word_dim + y[index]] -= DTYPE(1.0);
+    }
+}
+
+template <>
+void softmax_grad_gpu<float>(float *input, int *y, const int word_dim, const int T)
+{
+  kernel_softmax_grad<float><<<RNN_GET_BLOCKS(T), RNN_CUDA_NUM_THREADS>>>(input, y, word_dim, T);
+}
+
+template <>
+void softmax_grad_gpu<double>(double *input, int *y, const int word_dim, const int T)
+{
+  kernel_softmax_grad<double><<<RNN_GET_BLOCKS(T), RNN_CUDA_NUM_THREADS>>>(input, y, word_dim, T);
+}
+
+template <typename DTYPE>
+__global__ void kernel_tanh_grad(DTYPE *input1, DTYPE *input2, DTYPE *output, int N)
+{
+  CUDA_KERNEL_LOOP(index, N)
+    {
+      output[index] = input1[index] * (1 - input2[index] * input2[index]);
+    }
+}
+
+template <>
+void tanh_grad_gpu<float>(float *input1, float *input2, float *output, int N)
+{
+  kernel_tanh_grad<float><<<RNN_GET_BLOCKS(N), RNN_CUDA_NUM_THREADS>>>(input1, input2, output ,N);
+}
+
+template <>
+void tanh_grad_gpu<double>(double *input1, double *input2, double *output, int N)
+{
+  kernel_tanh_grad<double><<<RNN_GET_BLOCKS(N), RNN_CUDA_NUM_THREADS>>>(input1, input2, output, N);
+}
+
