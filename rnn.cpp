@@ -48,11 +48,13 @@ RNN<DTYPE>::RNN(string snapshot)
   read(snapshot);
 }
 
+// we need the maximum length of sentences in the dataset
+// to accelerate cuda computations
 template <typename DTYPE>
-void RNN<DTYPE>::set_mode(mode solver_mode)
+void RNN<DTYPE>::set_mode(mode solver_mode, int max_length)
 {
   solver_mode_ = solver_mode;
-  if(solver_mode_ == GPU) initialize();
+  max_size_ = max_length;
 }
 
 template <typename DTYPE>
@@ -112,6 +114,17 @@ void RNN<DTYPE>::initialize()
       cuda_check();
       cudaStat = cudaMalloc((void**)&dev_ds, hidden_dim_ * sizeof(DTYPE));
       cuda_check();
+
+      cudaStat = cudaMalloc((void**)&dev_o_, max_size_ * word_dim_ * sizeof(DTYPE));
+      cuda_check();
+      cudaStat = cudaMalloc((void**)&dev_s_, (max_size_ + 1) * hidden_dim_ * sizeof(DTYPE));
+      cuda_check();
+
+      cudaStat = cudaMalloc((void**)&dev_delta_o, max_size_ * word_dim_ * sizeof(DTYPE));
+      cuda_check();
+
+      cudaStat = cudaMalloc((void**)&dev_y, max_size_ * sizeof(int));
+      cuda_check();
       rnn_gpu_set<DTYPE>(handle, hidden_dim_ * word_dim_, U.get(), dev_U);
       rnn_gpu_set<DTYPE>(handle, hidden_dim_ * word_dim_, V.get(), dev_V);
       rnn_gpu_set<DTYPE>(handle, hidden_dim_ * hidden_dim_, W.get(), dev_W);
@@ -119,6 +132,11 @@ void RNN<DTYPE>::initialize()
       rnn_gpu_set<DTYPE>(handle, hidden_dim_ * word_dim_, dU.get(), dev_dU);
       rnn_gpu_set<DTYPE>(handle, hidden_dim_ * word_dim_, dV.get(), dev_dV);
       rnn_gpu_set<DTYPE>(handle, hidden_dim_ * hidden_dim_, dW.get(), dev_dW);
+
+      // prepare the CPU array o_
+      // for the purpose of output and prediction
+      unique_ptr<DTYPE[]> o(new DTYPE[max_size_ * word_dim_]);
+      o_ = move(o);
     }
 }
 
@@ -149,6 +167,10 @@ RNN<DTYPE>::~RNN()
       cudaFree(dev_Vs_t);
       cudaFree(dev_ws);
       cudaFree(dev_ds);
+      cudaFree(dev_o_);
+      cudaFree(dev_s_);
+      cudaFree(dev_delta_o);
+      cudaFree(dev_y);
       cublasDestroy(handle);
     }
 }
@@ -275,18 +297,17 @@ DTYPE RNN<DTYPE>::calculate_total_loss_gpu(vector <vector <int>> &x, vector <vec
     // for ith training sample
   for(size_t i = 0; i < y.size(); ++i)
     {
-      //      finalize();
       forward_gpu(x[i]);
-      unique_ptr<DTYPE[]> o_temp(new DTYPE[word_dim_ * y[i].size()]);
-      rnn_gpu_get(handle, word_dim_ * y[i].size(), dev_o_, o_temp.get());
-      cudaFree(dev_o_);
-      cudaFree(dev_s_);
-        // for jth word
-      DTYPE loss = 0.0;
       
+      rnn_gpu_get(handle, word_dim_ * x[i].size(), dev_o_, o_.get());
+      DTYPE loss = 0.0;
+      //cout << o_[0] << endl;
+      //      forward_cpu(x[i]);
+      //      cout << o_[0] << endl; exit(1);
       for(size_t j = 0; j < y[i].size(); ++j)
-	loss += log(o_temp[j * word_dim_ + y[i][j]]);
+	loss += log(o_[j * word_dim_ + y[i][j]]);
       L += -1 * loss;
+
     }
   return L;
 }
@@ -466,7 +487,7 @@ template <typename DTYPE>
 void RNN<DTYPE>::gradient_check_gpu(vector <int> &x, vector <int> &y, DTYPE h, DTYPE err_thres)
 {
   bptt_gpu(x,y);
-  finalize();
+  syncDevicetoHost();
   cout << "Performing gradient check on GPU for parameter V with size " << hidden_dim_ * word_dim_ << endl;
 
   vector <vector <int>> X;
@@ -661,7 +682,7 @@ void RNN<DTYPE>::train(vector <vector <int>> &X_train, vector <vector <int>> &Y_
 }
 
 template <typename DTYPE>
-void RNN<DTYPE>::finalize()
+void RNN<DTYPE>::syncDevicetoHost()
 {
   if (solver_mode_ == GPU)
     {
@@ -671,7 +692,6 @@ void RNN<DTYPE>::finalize()
       rnn_gpu_get<DTYPE>(handle, word_dim_ * hidden_dim_, dev_U, U.get());
       rnn_gpu_get<DTYPE>(handle, word_dim_ * hidden_dim_, dev_V, V.get());
       rnn_gpu_get<DTYPE>(handle, hidden_dim_ * hidden_dim_, dev_W, W.get());
-      rnn_gpu_get<DTYPE>(handle, word_dim_ , dev_o_, o_.get());
     }
 }
 
@@ -685,7 +705,7 @@ void RNN<DTYPE>::write(string snapshot)
 template <>
 void RNN<double>::write(string snapshot)
 {
-  RNN<double>::finalize();
+  syncDevicetoHost();
   GOOGLE_PROTOBUF_VERIFY_VERSION;
   NetParamterD net;
   net.set_hidden_dim(hidden_dim_);
@@ -712,7 +732,7 @@ void RNN<double>::write(string snapshot)
 template <>
 void RNN<float>::write(string snapshot)
 {
-  finalize();
+  syncDevicetoHost();
   GOOGLE_PROTOBUF_VERIFY_VERSION;
   NetParamterS net;
   net.set_hidden_dim(hidden_dim_);
@@ -840,11 +860,7 @@ void RNN<DTYPE>::forward_gpu(vector <int> &x)
    
   // @s state vector
   // @o output vector
-  cudaStat = cudaMalloc((void**)&dev_o_, T * word_dim_ * sizeof(DTYPE));
-  cuda_check();
-  cudaStat = cudaMalloc((void**)&dev_s_, (T + 1) * hidden_dim_ * sizeof(DTYPE));
-  cuda_check();
-  
+    
   DTYPE zero = static_cast<DTYPE>(0.0);
   DTYPE one = static_cast<DTYPE>(1.0);
   rnn_gpu_scal<DTYPE>(handle, (T + 1) * hidden_dim_, &zero, dev_s_);
@@ -863,6 +879,9 @@ void RNN<DTYPE>::forward_gpu(vector <int> &x)
   o_t = dev_o_ + t * word_dim_;
 
   rnn_gpu_copy<DTYPE>(handle, hidden_dim_, U_t, s_t);
+  // DTYPE a;
+  // rnn_gpu_get<DTYPE>(handle, 1, dev_s_, &a);
+  // cout << a << endl;
 
   rnn_gpu_gemv<DTYPE>(handle, CblasNoTrans, hidden_dim_, hidden_dim_, &one, dev_W, s_t_1, &one, s_t);
 
@@ -889,6 +908,7 @@ void RNN<DTYPE>::forward_gpu(vector <int> &x)
       rnn_gpu_gemv<DTYPE>(handle, CblasNoTrans, word_dim_, hidden_dim_, &one, dev_V, s_t, &zero, dev_Vs_t);
       rnn_gpu_softmax<DTYPE>(word_dim_, dev_Vs_t, o_t);
     }
+
 }
 
 template <typename DTYPE>
@@ -905,14 +925,7 @@ void RNN<DTYPE>::bptt_gpu(vector <int> &x, vector <int> &y)
   // perform forward propagation
   forward_gpu(x);
 
-  DTYPE *dev_delta_o;
-  cudaStat = cudaMalloc((void**)&dev_delta_o, T * word_dim_ * sizeof(DTYPE));
-  cuda_check();
   rnn_gpu_copy<DTYPE>(handle, T * word_dim_, dev_o_, dev_delta_o);
-
-  int *dev_y;
-  cudaStat = cudaMalloc((void**)&dev_y, T * sizeof(int));
-  cuda_check();
 
   int *yy = new int[T];
   for(int i = 0; i < T; ++i) yy[i] = y[i];
@@ -961,11 +974,6 @@ void RNN<DTYPE>::bptt_gpu(vector <int> &x, vector <int> &y)
 	  tanh_grad_gpu<DTYPE>(dev_ws, s_bptt_step_1, dev_ds, hidden_dim_);
       	}
     }
-  cudaFree(dev_o_);
-  cudaFree(dev_s_);
-  cudaFree(dev_delta_o);
-  cudaFree(dev_y);
-
 }
 
 template <typename DTYPE>
@@ -1002,7 +1010,7 @@ void RNN<DTYPE>::train_gpu(vector <vector <int>> &X_train, vector <vector <int>>
       if (epoch % snapshot_interval == 0)
 	{
 	  string snapshot_filename = "rnnmodel_" + to_string(epoch) + ".snapshot";
-	  finalize();
+	  syncDevicetoHost();
 	  write(snapshot_filename);
 	}
       if (epoch % evaluate_loss_after == 0)
@@ -1038,6 +1046,6 @@ void RNN<DTYPE>::train_gpu(vector <vector <int>> &X_train, vector <vector <int>>
 	}
       epoch_ = epoch + 1;
     }
-  finalize();
+  syncDevicetoHost();
   write("model_trained.snapshot");
 }

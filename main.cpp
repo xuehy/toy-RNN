@@ -19,20 +19,15 @@ int main()
   cout << setprecision(10);
 
   // // gradient check
-  // int grad_check_vocab_size = 250;
-  // RNN<double> rnn_check(grad_check_vocab_size, 10, 1000);
-  // mode md = GPU;
-  // rnn_check.set_mode(md);
-  // rnn_check.initialize();
-  // vector <int> xx{0,1,2,3,4};
-  // vector <int> yy{1,2,3,4,5};
-  // rnn_check.gradient_check_gpu(xx,yy);
-
+  int grad_check_vocab_size = 250;
+  //RNN<double> rnn_check(grad_check_vocab_size, 10, 1000);
   mode md = GPU;
-  rnn = new RNN<float>(4000,100,1000);
-  //rnn = new RNN("rnn_model.snapshot");
-  rnn -> set_mode(md);
-  rnn -> initialize();
+  //  rnn_check.set_mode(md, 5);
+  //  rnn_check.initialize();
+  vector <int> xx{0,1,2,3,4};
+  vector <int> yy{1,2,3,4,5};
+  //  rnn_check.gradient_check_gpu(xx,yy);
+
   string dataPath = "../kjv12/KJV12.TXT";
   Dataset<int> dataset(dataPath, 4000);
 
@@ -68,8 +63,10 @@ int main()
   x_val.resize(1000);
   y_val.resize(1000);
 
+  int max_size = 0;
   for(size_t i = 0; i < 1000; ++i)
     {
+      max_size = max(max_size, (int)dataset.sentences[val_index[i]].size() - 1);
       x_val[i].resize(dataset.sentences[val_index[i]].size() - 1);
       y_val[i].resize(dataset.sentences[val_index[i]].size() - 1);
       copy(dataset.sentences[val_index[i]].begin(), dataset.sentences[val_index[i]].end() - 1,
@@ -81,13 +78,20 @@ int main()
   for(size_t i = 0; i < total_size - 1000; ++i)
     {
       int ind = train_index[i];
+      max_size = max(max_size, (int)dataset.sentences[ind].size() - 1);
       X_train[i].resize(dataset.sentences[ind].size() - 1);
       y_train[i].resize(dataset.sentences[ind].size() - 1);
       copy(dataset.sentences[ind].begin(), dataset.sentences[ind].end() - 1, X_train[i].begin());
       copy(dataset.sentences[ind].begin() + 1, dataset.sentences[ind].end(), y_train[i].begin());
     }
 
+  cout << "longest sentence has " << max_size << " words" << endl;
 
+  rnn = new RNN<float>(4000,100,50);
+  //rnn = new RNN("rnn_model.snapshot");
+  rnn -> set_mode(md, max_size + 1);
+  rnn -> initialize();
+  rnn -> syncHosttoDevice();
   signal(SIGINT, interrupt);
   rnn -> train_gpu(X_train, y_train, x_val, y_val, 0.005, 1000, 5, 9, 15);
   delete rnn;

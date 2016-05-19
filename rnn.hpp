@@ -48,12 +48,17 @@ class RNN
    */
   DTYPE lr_;
   int epoch_;
+
+  /**
+   * evil variable
+   */
+  int max_size_;
   /**
    * internal variable for output and state
    */
   unique_ptr<DTYPE[]> o_;
   unique_ptr<DTYPE[]> s_;
-
+  
   /**
    * device memory pointers
    */
@@ -62,6 +67,8 @@ class RNN
   DTYPE *dev_Vs_t;
   DTYPE *dev_ws;
   DTYPE *dev_ds;
+  DTYPE *dev_delta_o;
+  int *dev_y;
   /**
    * gradient for V
    */
@@ -155,7 +162,7 @@ public:
    */
   void read(string snapshot);
 
-  void set_mode(mode solver_mode);
+  void set_mode(mode solver_mode, int max_length);
 
   /**
    * initialize solver mode on GPU
@@ -169,7 +176,7 @@ public:
    * copy the device memory to host memory
    * such that the parameters can be saved
    */
-  void finalize();
+  void syncDevicetoHost();
 };
 
 

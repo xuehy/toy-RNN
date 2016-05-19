@@ -60,7 +60,6 @@ vector <Sentence> Dataset<DType>::tokenize()
 	  sentence.add_word(word.substr(0, word.length() - 1));
 	  dictionary[word.substr(0, word.length() - 1)] += 1;
 	  result.push_back(sentence);
-
 	  sentence.clear();
 	}
 
