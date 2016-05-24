@@ -145,7 +145,7 @@ __global__ void kernel_tanh(const DTYPE *input, DTYPE *output, int N)
 }
 
 template <typename DTYPE>
-__global__ void kernel_div_scalar(DTYPE *alpha, const DTYPE *input, DTYPE *output, const int N)
+__global__ void kernel_div_scalar(DTYPE *alpha, DTYPE *input, DTYPE *output, const int N)
 {
   CUDA_KERNEL_LOOP(index, N)
     {
@@ -188,34 +188,149 @@ __global__ void kernel_sum(const DTYPE *input, DTYPE *out, const int N)
       *out = sum;
     } 
 }
-template <>
-void rnn_gpu_softmax<float>(const int N, const float *X, float *Y)
+
+// reduction sum needs detailed improvement
+template <typename DTYPE>
+__global__ void reduction_sum(const DTYPE *input, DTYPE *output, const int N)
 {
-  float *maxval;
-  cudaMalloc((void**)&maxval, sizeof(float));
-  kernel_max<float><<<1,1>>>(X, maxval, N);
-  kernel_sub_scalar<float><<<RNN_GET_BLOCKS(N), RNN_CUDA_NUM_THREADS>>>(maxval, X, Y, N);
+      int tid = threadIdx.x;
+      int bid = blockIdx.x;
+      int index = bid * blockDim.x + tid;
+      int block_start = bid * RNN_CUDA_NUM_THREADS;
+      // shared memory is shared within the same block
+      __shared__ DTYPE s_data[RNN_CUDA_NUM_THREADS];
+      if(block_start + tid < N)
+	s_data[tid] = input[index];
+      else
+	s_data[tid] = 0;
+	
+      __syncthreads();
 
-  kernel_exp<float><<<RNN_GET_BLOCKS(N), RNN_CUDA_NUM_THREADS>>>(Y, Y, N);
-  kernel_sum<float><<<1,1>>>(Y, maxval, N);
+      
+      for(int i = RNN_CUDA_NUM_THREADS / 2; i > 0; i >>= 1)
+	{
+	  if (tid < i)
+	    s_data[tid] = s_data[tid] + s_data[tid + i];
+	  __syncthreads();
+	}
+      if (tid == 0)
+	output[bid] = s_data[0];
+}
 
-  kernel_div_scalar<float><<<RNN_GET_BLOCKS(N), RNN_CUDA_NUM_THREADS>>>(maxval, Y, Y, N);
-  cudaFree(maxval);
+/**
+ * takes device pointers as parameters
+ * @input 
+ * @sum: the array of the same size as input
+ */
+template <>
+void rnn_reduction_sum<float>(const float *input, float *sum, int N)
+{
+  reduction_sum<float><<<RNN_GET_BLOCKS(N), RNN_CUDA_NUM_THREADS>>>(input, sum, N);
+  N = RNN_GET_BLOCKS(N);
+  if (N == 1) return;
+  while ( N > 1 )
+  {
+    reduction_sum<float><<<RNN_GET_BLOCKS(N), RNN_CUDA_NUM_THREADS>>>(sum, sum, N);
+      N = RNN_GET_BLOCKS(N);
+  }
 }
 
 template <>
-void rnn_gpu_softmax<double>(const int N, const double *X, double *Y)
+void rnn_reduction_sum<double>(const double *input, double *sum, int N)
 {
-  double *maxval;
-  cudaMalloc((void**)&maxval, sizeof(double));
-  kernel_max<double><<<1,1>>>(X, maxval, N);
-  kernel_sub_scalar<double><<<RNN_GET_BLOCKS(N), RNN_CUDA_NUM_THREADS>>>(maxval, X, Y, N);
-  
-  kernel_exp<double><<<RNN_GET_BLOCKS(N), RNN_CUDA_NUM_THREADS>>>(Y, Y, N);
+  reduction_sum<double><<<RNN_GET_BLOCKS(N), RNN_CUDA_NUM_THREADS>>>(input, sum, N);
+  N = RNN_GET_BLOCKS(N);
+  if( 1 == N ) return;
+  while ( N > 1 )
+    {
+      reduction_sum<double><<<RNN_GET_BLOCKS(N), RNN_CUDA_NUM_THREADS>>>(sum, sum, N);
+      N = RNN_GET_BLOCKS(N);
+    }
+}
 
-  kernel_sum<double><<<1,1>>>(Y, maxval, N);
-  kernel_div_scalar<double><<<RNN_GET_BLOCKS(N), RNN_CUDA_NUM_THREADS>>>(maxval, Y, Y, N);
-  cudaFree(maxval);
+// reduction sum needs detailed improvement
+template <typename DTYPE>
+__global__ void reduction_max(const DTYPE *input, DTYPE *output, const int N)
+{
+      int tid = threadIdx.x;
+      int bid = blockIdx.x;
+      int index = bid * blockDim.x + tid;
+      int block_start = bid * RNN_CUDA_NUM_THREADS;
+      // shared memory is shared within the same block
+      __shared__ DTYPE s_data[RNN_CUDA_NUM_THREADS];
+      if(block_start + tid < N)
+	s_data[tid] = input[index];
+      else
+	s_data[tid] = -FLT_MAX;
+	
+      __syncthreads();
+
+      
+      for(int i = RNN_CUDA_NUM_THREADS / 2; i > 0; i >>= 1)
+	{
+	  if (tid < i)
+	    s_data[tid] = max(s_data[tid], s_data[tid + i]);
+	  __syncthreads();
+	}
+      if (tid == 0)
+	output[bid] = s_data[0];
+}
+
+template <>
+void rnn_reduction_max<float>(const float *input, float *output, int N)
+{
+  reduction_max<float><<<RNN_GET_BLOCKS(N), RNN_CUDA_NUM_THREADS>>>(input, output, N);
+  N = RNN_GET_BLOCKS(N);
+  if (N == 1) return;
+  while ( N > 1 )
+  {
+    reduction_max<float><<<RNN_GET_BLOCKS(N), RNN_CUDA_NUM_THREADS>>>(output, output, N);
+      N = RNN_GET_BLOCKS(N);
+  }
+}
+
+template <>
+void rnn_reduction_max<double>(const double *input, double *output, int N)
+{
+  reduction_max<double><<<RNN_GET_BLOCKS(N), RNN_CUDA_NUM_THREADS>>>(input, output, N);
+  N = RNN_GET_BLOCKS(N);
+  if (N == 1) return;
+  while ( N > 1 )
+  {
+    reduction_max<double><<<RNN_GET_BLOCKS(N), RNN_CUDA_NUM_THREADS>>>(output, output, N);
+      N = RNN_GET_BLOCKS(N);
+  }
+}
+
+template <>
+void rnn_gpu_softmax<float>(const int N, const float *X, float *Y, float *reduction)
+{
+  rnn_reduction_max<float>(X, reduction, N);
+  kernel_sub_scalar<float><<<RNN_GET_BLOCKS(N), RNN_CUDA_NUM_THREADS>>>(reduction, X, Y, N);
+  kernel_exp<float><<<RNN_GET_BLOCKS(N), RNN_CUDA_NUM_THREADS>>>(Y, Y, N);
+  rnn_reduction_sum<float>(Y, reduction, N);
+  kernel_div_scalar<float><<<RNN_GET_BLOCKS(N), RNN_CUDA_NUM_THREADS>>>(reduction, Y, Y, N);
+
+  // float *maxval;
+  // cudaMalloc((void**)&maxval, sizeof(float));
+  // kernel_max<float><<<1,1>>>(X, maxval, N);
+  // kernel_sub_scalar<float><<<RNN_GET_BLOCKS(N), RNN_CUDA_NUM_THREADS>>>(maxval, X, Y, N);
+
+  // kernel_exp<float><<<RNN_GET_BLOCKS(N), RNN_CUDA_NUM_THREADS>>>(Y, Y, N);
+  // kernel_sum<float><<<1,1>>>(Y, maxval, N);
+
+  // kernel_div_scalar<float><<<RNN_GET_BLOCKS(N), RNN_CUDA_NUM_THREADS>>>(maxval, Y, Y, N);
+  // cudaFree(maxval)
+}
+
+template <>
+void rnn_gpu_softmax<double>(const int N, const double *X, double *Y, double *reduction)
+{
+  rnn_reduction_max<double>(X, reduction, N);
+  kernel_sub_scalar<double><<<RNN_GET_BLOCKS(N), RNN_CUDA_NUM_THREADS>>>(reduction, X, Y, N);
+  kernel_exp<double><<<RNN_GET_BLOCKS(N), RNN_CUDA_NUM_THREADS>>>(Y, Y, N);
+  rnn_reduction_sum<double>(Y, reduction, N);
+  kernel_div_scalar<double><<<RNN_GET_BLOCKS(N), RNN_CUDA_NUM_THREADS>>>(reduction, Y, Y, N);
 }
 
 // == the following functions are layer-specific

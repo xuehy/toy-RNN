@@ -7,6 +7,7 @@
 #include <cblas.h>
 #include <cublas_v2.h>
 #include <cuda_runtime.h>
+#include <iostream>
 #include "device_alternate.hpp"
 using namespace std;
 /**
@@ -76,7 +77,7 @@ template <typename DTYPE>
 void rnn_gpu_tanh(const int N, const DTYPE *X, DTYPE *Y);
 
 template <typename DTYPE>
-void rnn_gpu_softmax(const int N, const DTYPE *X, DTYPE *Y);
+void rnn_gpu_softmax(const int N, const DTYPE *X, DTYPE *Y, DTYPE *reduction);
 
 // following functions are layer specific
 template <typename DTYPE>
@@ -85,6 +86,10 @@ void softmax_grad_gpu(DTYPE *input, int *y, const int word_dim_, const int T);
 template <typename DTYPE>
 void tanh_grad_gpu(DTYPE *input1, DTYPE *input2, DTYPE *output, int N);
 
+template <typename DTYPE>
+void rnn_reduction_sum(const DTYPE *input, DTYPE *sum, int N);
 
+template <typename DTYPE>
+void rnn_reduction_max(const DTYPE *input, DTYPE *output, int N);
 //#include "rnn_math.cpp"
 #endif

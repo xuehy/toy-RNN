@@ -1,0 +1,6 @@
+* Time Comparison
+** CPU:                               20s/1000 sgds
+** GPU without reduction sum and max: 21s/1000 sgds
+** GPU with reduction sum and max:     8s/1000 sgds
+
+

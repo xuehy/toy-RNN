@@ -69,6 +69,7 @@ class RNN
   DTYPE *dev_ds;
   DTYPE *dev_delta_o;
   int *dev_y;
+  DTYPE *reduction_;
   /**
    * gradient for V
    */

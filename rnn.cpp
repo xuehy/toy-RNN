@@ -1,3 +1,16 @@
+
+void print_time()
+{
+  time_t rawtime;
+  struct tm *timeinfo;
+  char buf[80];
+  time(&rawtime);
+  timeinfo = localtime(&rawtime);
+  strftime(buf, sizeof(buf), "%Y-%m-%d %X", timeinfo);
+  cout << buf << endl;
+  
+}
+
 template <typename DTYPE>
 RNN<DTYPE>::RNN(int word_dim, int hidden_dim, int bptt_truncate)
 {
@@ -9,8 +22,9 @@ RNN<DTYPE>::RNN(int word_dim, int hidden_dim, int bptt_truncate)
   // == initialize model parameters ==
   
   random_device rd;
-  //  mt19937 gen(rd());
   mt19937 gen(rd());
+
+
 
   uniform_real_distribution<DTYPE> dis1(-1.0/sqrt(word_dim_), 1.0/sqrt(word_dim_));
   uniform_real_distribution<DTYPE> dis2(-1.0/sqrt(hidden_dim_), 1.0/sqrt(hidden_dim_));
@@ -125,6 +139,10 @@ void RNN<DTYPE>::initialize()
 
       cudaStat = cudaMalloc((void**)&dev_y, max_size_ * sizeof(int));
       cuda_check();
+
+      cudaStat = cudaMalloc((void**)&reduction_, word_dim_ * sizeof(DTYPE));
+      cuda_check();
+      
       rnn_gpu_set<DTYPE>(handle, hidden_dim_ * word_dim_, U.get(), dev_U);
       rnn_gpu_set<DTYPE>(handle, hidden_dim_ * word_dim_, V.get(), dev_V);
       rnn_gpu_set<DTYPE>(handle, hidden_dim_ * hidden_dim_, W.get(), dev_W);
@@ -171,6 +189,7 @@ RNN<DTYPE>::~RNN()
       cudaFree(dev_s_);
       cudaFree(dev_delta_o);
       cudaFree(dev_y);
+      cudaFree(reduction_);
       cublasDestroy(handle);
     }
 }
@@ -280,6 +299,7 @@ DTYPE RNN<DTYPE>::calculate_total_loss(vector <vector <int>> &x, vector <vector 
   // for ith training sample
   for(size_t i = 0; i < y.size(); ++i)
     {
+
       forward_cpu(x[i]);
       // for jth word
       DTYPE loss = 0.0;
@@ -287,6 +307,7 @@ DTYPE RNN<DTYPE>::calculate_total_loss(vector <vector <int>> &x, vector <vector 
 	loss += log(o_[j * word_dim_ + y[i][j]]);
       L += -1 * loss;
     }
+
   return L;
 }
 
@@ -294,11 +315,11 @@ template <typename DTYPE>
 DTYPE RNN<DTYPE>::calculate_total_loss_gpu(vector <vector <int>> &x, vector <vector <int>> &y)
 {
   DTYPE L = 0.0;
+
     // for ith training sample
   for(size_t i = 0; i < y.size(); ++i)
     {
       forward_gpu(x[i]);
-      
       rnn_gpu_get(handle, word_dim_ * x[i].size(), dev_o_, o_.get());
       DTYPE loss = 0.0;
       //cout << o_[0] << endl;
@@ -621,7 +642,7 @@ void RNN<DTYPE>::train(vector <vector <int>> &X_train, vector <vector <int>> &Y_
   struct tm *timeinfo;
   char buf[80];
 
-  cout << "start training..." << endl;
+  cout << "start training with CPU..." << endl;
   DTYPE loss_last = 10000.0;
 
   // this means the model is not at initial state
@@ -646,7 +667,7 @@ void RNN<DTYPE>::train(vector <vector <int>> &X_train, vector <vector <int>> &Y_
 	  string snapshot_filename = "rnnmodel_" + to_string(epoch) + ".snapshot";
 	  write(snapshot_filename);
 	}
-      if (epoch % evaluate_loss_after == 0)
+      if (epoch % evaluate_loss_after == 0 /*&& epoch > 0*/)
 	{
 	  DTYPE loss = calculate_loss(X_train, Y_train);
 	  time(&rawtime);
@@ -661,7 +682,7 @@ void RNN<DTYPE>::train(vector <vector <int>> &X_train, vector <vector <int>> &Y_
 	    }
 	  loss_last = loss;
 	}
-      if (epoch % val_after == 0)
+      if (epoch % val_after == 0 /*&& epoch > 0*/)
         {
 	  DTYPE val_loss = calculate_loss(x_val, y_val);
 	  time(&rawtime);
@@ -670,9 +691,13 @@ void RNN<DTYPE>::train(vector <vector <int>> &X_train, vector <vector <int>> &Y_
 	  cout << buf << " epoch=" << epoch << " validation loss = " << val_loss << endl;
 	}
 
+      //      print_time();
       for(size_t i = 0; i < Y_train.size(); ++i)
 
 	{
+	  // debug
+	  //  if(i == 1000)
+	  //	    print_time();
 	  sgd_step(X_train[i], Y_train[i], learning_rate);
 	  
 	}
@@ -889,7 +914,7 @@ void RNN<DTYPE>::forward_gpu(vector <int> &x)
 
   rnn_gpu_gemv<DTYPE>(handle, CblasNoTrans, word_dim_, hidden_dim_, &one, dev_V, s_t, &zero, dev_Vs_t);
 
-  rnn_gpu_softmax<DTYPE>(word_dim_, dev_Vs_t, o_t);
+  rnn_gpu_softmax<DTYPE>(word_dim_, dev_Vs_t, o_t, reduction_);
 
   for(t = 1; t < T; ++t)
     {
@@ -906,7 +931,7 @@ void RNN<DTYPE>::forward_gpu(vector <int> &x)
       rnn_gpu_tanh<DTYPE>(hidden_dim_, s_t, s_t);
 
       rnn_gpu_gemv<DTYPE>(handle, CblasNoTrans, word_dim_, hidden_dim_, &one, dev_V, s_t, &zero, dev_Vs_t);
-      rnn_gpu_softmax<DTYPE>(word_dim_, dev_Vs_t, o_t);
+      rnn_gpu_softmax<DTYPE>(word_dim_, dev_Vs_t, o_t, reduction_);
     }
 
 }
@@ -987,7 +1012,7 @@ void RNN<DTYPE>::train_gpu(vector <vector <int>> &X_train, vector <vector <int>>
   struct tm *timeinfo;
   char buf[80];
 
-  cout << "start training..." << endl;
+  cout << "start training with GPU..." << endl;
   DTYPE loss_last = 10000.0;
 
   // this means the model is not at initial state
@@ -1013,9 +1038,10 @@ void RNN<DTYPE>::train_gpu(vector <vector <int>> &X_train, vector <vector <int>>
 	  syncDevicetoHost();
 	  write(snapshot_filename);
 	}
-      if (epoch % evaluate_loss_after == 0)
+      // debug
+      if (epoch % evaluate_loss_after == 0 /*&& epoch > 0*/)
 	{
-	  cout << "== evaluating loss == " << endl;
+	  //	  cout << "== evaluating loss == " << endl;
 	  DTYPE loss = calculate_loss_gpu(X_train, Y_train);
 	  time(&rawtime);
 	  timeinfo = localtime(&rawtime);
@@ -1029,18 +1055,21 @@ void RNN<DTYPE>::train_gpu(vector <vector <int>> &X_train, vector <vector <int>>
 	    }
 	  loss_last = loss;
 	}
-      if (epoch % val_after == 0)
+      if (epoch % val_after == 0 /*&& epoch > 0*/)
         {
 	  DTYPE val_loss = calculate_loss_gpu(x_val, y_val);
 	  time(&rawtime);
 	  timeinfo = localtime(&rawtime);
 	  strftime(buf, sizeof(buf), "%Y-%m-%d %X", timeinfo);
-	  cout << buf << " epoch=" << epoch << " validation loss = " << val_loss << endl;
+	  cout << buf << "  epoch=" << epoch << " validation loss = " << val_loss << endl;
 	}
 
+      //      print_time();
       for(size_t i = 0; i < Y_train.size(); ++i)
 
 	{
+	  //  if(i == 1000)
+	  //	    print_time();
 	  sgd_step_gpu(X_train[i], Y_train[i], learning_rate);
 	  
 	}
@@ -1048,4 +1077,5 @@ void RNN<DTYPE>::train_gpu(vector <vector <int>> &X_train, vector <vector <int>>
     }
   syncDevicetoHost();
   write("model_trained.snapshot");
+  exit(1);
 }

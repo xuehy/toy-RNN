@@ -20,13 +20,13 @@ int main()
 
   // // gradient check
   int grad_check_vocab_size = 250;
-  //RNN<double> rnn_check(grad_check_vocab_size, 10, 1000);
+  RNN<double> rnn_check(grad_check_vocab_size, 10, 1000);
   mode md = GPU;
-  //  rnn_check.set_mode(md, 5);
-  //  rnn_check.initialize();
+  rnn_check.set_mode(md, 1000);
+  rnn_check.initialize();
   vector <int> xx{0,1,2,3,4};
   vector <int> yy{1,2,3,4,5};
-  //  rnn_check.gradient_check_gpu(xx,yy);
+  rnn_check.gradient_check_gpu(xx,yy);
 
   string dataPath = "../kjv12/KJV12.TXT";
   Dataset<int> dataset(dataPath, 4000);
@@ -87,11 +87,11 @@ int main()
 
   cout << "longest sentence has " << max_size << " words" << endl;
 
+  md = GPU;
   rnn = new RNN<float>(4000,100,50);
   //rnn = new RNN("rnn_model.snapshot");
   rnn -> set_mode(md, max_size + 1);
   rnn -> initialize();
-  rnn -> syncHosttoDevice();
   signal(SIGINT, interrupt);
   rnn -> train_gpu(X_train, y_train, x_val, y_val, 0.005, 1000, 5, 9, 15);
   delete rnn;
