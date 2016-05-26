@@ -196,23 +196,24 @@ __global__ void reduction_sum(const DTYPE *input, DTYPE *output, const int N)
       int tid = threadIdx.x;
       int bid = blockIdx.x;
       int index = bid * blockDim.x + tid;
-      int block_start = bid * RNN_CUDA_NUM_THREADS;
+
       // shared memory is shared within the same block
       __shared__ DTYPE s_data[RNN_CUDA_NUM_THREADS];
-      if(block_start + tid < N)
+
+      if (index < N)
 	s_data[tid] = input[index];
       else
 	s_data[tid] = 0;
-	
+      
       __syncthreads();
 
-      
-      for(int i = RNN_CUDA_NUM_THREADS / 2; i > 0; i >>= 1)
-	{
-	  if (tid < i)
-	    s_data[tid] = s_data[tid] + s_data[tid + i];
-	  __syncthreads();
-	}
+      for(int i = RNN_CUDA_NUM_THREADS/2; i > 0; i >>= 1)
+      	{
+      	  if (tid < i)
+      	    s_data[tid] = s_data[tid] + s_data[tid + i];
+      	  __syncthreads();
+      	}
+
       if (tid == 0)
 	output[bid] = s_data[0];
 }
@@ -231,7 +232,7 @@ void rnn_reduction_sum<float>(const float *input, float *sum, int N)
   while ( N > 1 )
   {
     reduction_sum<float><<<RNN_GET_BLOCKS(N), RNN_CUDA_NUM_THREADS>>>(sum, sum, N);
-      N = RNN_GET_BLOCKS(N);
+    N = RNN_GET_BLOCKS(N);
   }
 }
 

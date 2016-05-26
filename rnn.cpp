@@ -1011,7 +1011,7 @@ void RNN<DTYPE>::train_gpu(vector <vector <int>> &X_train, vector <vector <int>>
   time_t rawtime;
   struct tm *timeinfo;
   char buf[80];
-
+  print_time();
   cout << "start training with GPU..." << endl;
   DTYPE loss_last = 10000.0;
 
@@ -1025,11 +1025,12 @@ void RNN<DTYPE>::train_gpu(vector <vector <int>> &X_train, vector <vector <int>>
     time(&rawtime);
     timeinfo = localtime(&rawtime);
     strftime(buf, sizeof(buf), "%Y-%m-%d %X", timeinfo);
-    cout << buf << "validation loss = " << val_loss << endl;
+    cout << buf << "  validation loss = " << val_loss << endl;
+    cout << "continuing..." << endl;
   }
   else
     lr_ = learning_rate;
-  cout << "continuing..." << endl;
+
   for(int epoch = epoch_; epoch < nepoch; epoch ++)
     {
       if (epoch % snapshot_interval == 0)
